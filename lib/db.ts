@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 
-const DEFAULT_DB_PATH = "./data/finance.db";
+const DEFAULT_DB_FILENAME = "finance.db";
 
 const DEFAULT_CATEGORIES: { name: string; kind: "income" | "expense" | "both" }[] = [
   { name: "Alimentação", kind: "expense" },
@@ -26,8 +26,10 @@ const DEFAULT_SETTINGS: Record<string, string> = {
 let db: Database.Database | null = null;
 
 function resolveDbPath(): string {
-  const configured = process.env.DATABASE_PATH ?? DEFAULT_DB_PATH;
-  return path.resolve(process.cwd(), configured);
+  const filename = process.env.DATABASE_PATH
+    ? path.basename(process.env.DATABASE_PATH)
+    : DEFAULT_DB_FILENAME;
+  return path.join(process.cwd(), "data", filename);
 }
 
 function runMigrations(instance: Database.Database) {
