@@ -40,13 +40,19 @@ export function createTransaction(input: NewTransaction): Transaction {
 }
 
 export function getCurrentBalance(): number {
-  const row = getDb()
+  const db = getDb();
+
+  const transactionsRow = db
     .prepare(
       `SELECT
-         COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0) as balance
+         COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0) as net
        FROM transactions`
     )
-    .get() as { balance: number };
+    .get() as { net: number };
 
-  return row.balance;
+  const cofrinhosRow = db
+    .prepare(`SELECT COALESCE(SUM(balance), 0) as total FROM cofrinhos`)
+    .get() as { total: number };
+
+  return transactionsRow.net - cofrinhosRow.total;
 }
