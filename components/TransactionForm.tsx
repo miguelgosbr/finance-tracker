@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Category } from "@/lib/categories";
+import type { TransactionType } from "@/lib/transactions";
 
 const NEW_CATEGORY_VALUE = "__new__";
 
@@ -9,12 +10,50 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-interface ExpenseFormProps {
+const COPY: Record<
+  TransactionType,
+  {
+    title: string;
+    descriptionLabel: string;
+    descriptionPlaceholder: string;
+    categoryLabel: string;
+    newCategoryPlaceholder: string;
+    submitLabel: string;
+    savingLabel: string;
+    buttonClassName: string;
+  }
+> = {
+  expense: {
+    title: "Novo gasto",
+    descriptionLabel: "Descrição",
+    descriptionPlaceholder: "Ex.: Almoço de trabalho",
+    categoryLabel: "Categoria",
+    newCategoryPlaceholder: "Ex.: Pets",
+    submitLabel: "Registrar gasto",
+    savingLabel: "Salvando...",
+    buttonClassName: "bg-red-600 hover:bg-red-700",
+  },
+  income: {
+    title: "Nova receita",
+    descriptionLabel: "Descrição / fonte",
+    descriptionPlaceholder: "Ex.: Salário, freela, rendimento",
+    categoryLabel: "Fonte",
+    newCategoryPlaceholder: "Ex.: Dividendos",
+    submitLabel: "Registrar receita",
+    savingLabel: "Salvando...",
+    buttonClassName: "bg-green-600 hover:bg-green-700",
+  },
+};
+
+interface TransactionFormProps {
+  type: TransactionType;
   categories: Category[];
   onCreated: () => void;
 }
 
-export function ExpenseForm({ categories, onCreated }: ExpenseFormProps) {
+export function TransactionForm({ type, categories, onCreated }: TransactionFormProps) {
+  const copy = COPY[type];
+
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [occurredOn, setOccurredOn] = useState(today());
@@ -43,7 +82,7 @@ export function ExpenseForm({ categories, onCreated }: ExpenseFormProps) {
         const categoryResponse = await fetch("/api/categories", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: newCategoryName, kind: "expense" }),
+          body: JSON.stringify({ name: newCategoryName, kind: type }),
         });
 
         const categoryData = await categoryResponse.json();
@@ -58,7 +97,7 @@ export function ExpenseForm({ categories, onCreated }: ExpenseFormProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: "expense",
+          type,
           amount: Number(amount),
           description,
           category_id: Number(resolvedCategoryId),
@@ -68,7 +107,7 @@ export function ExpenseForm({ categories, onCreated }: ExpenseFormProps) {
 
       const transactionData = await transactionResponse.json();
       if (!transactionResponse.ok) {
-        throw new Error(transactionData.error ?? "Não foi possível registrar o gasto.");
+        throw new Error(transactionData.error ?? "Não foi possível registrar o lançamento.");
       }
 
       setAmount("");
@@ -85,7 +124,7 @@ export function ExpenseForm({ categories, onCreated }: ExpenseFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Novo gasto</h2>
+      <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{copy.title}</h2>
 
       <div className="flex gap-3">
         <label className="flex flex-1 flex-col gap-1 text-sm">
@@ -115,19 +154,19 @@ export function ExpenseForm({ categories, onCreated }: ExpenseFormProps) {
       </div>
 
       <label className="flex flex-col gap-1 text-sm">
-        Descrição
+        {copy.descriptionLabel}
         <input
           type="text"
           required
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          placeholder="Ex.: Almoço de trabalho"
+          placeholder={copy.descriptionPlaceholder}
           className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
         />
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Categoria
+        {copy.categoryLabel}
         <select
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
@@ -150,7 +189,7 @@ export function ExpenseForm({ categories, onCreated }: ExpenseFormProps) {
             required
             value={newCategoryName}
             onChange={(event) => setNewCategoryName(event.target.value)}
-            placeholder="Ex.: Pets"
+            placeholder={copy.newCategoryPlaceholder}
             className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
           />
         </label>
@@ -163,9 +202,9 @@ export function ExpenseForm({ categories, onCreated }: ExpenseFormProps) {
       <button
         type="submit"
         disabled={status === "saving"}
-        className="mt-1 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+        className={`mt-1 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-60 ${copy.buttonClassName}`}
       >
-        {status === "saving" ? "Salvando..." : "Registrar gasto"}
+        {status === "saving" ? copy.savingLabel : copy.submitLabel}
       </button>
     </form>
   );
