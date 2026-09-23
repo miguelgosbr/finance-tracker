@@ -103,17 +103,18 @@ async function runMigrations(db: Queryable) {
 
   // Accounts gained bank/credit-line fields (replacing the old
   // checking/credit "kind" split — a credit line is now a property of an
-  // account) and later a customizable theme color, a credit line due day,
-  // and transactions gained a payment_method. Detect the old shape by the
-  // absence of accounts.credit_line_due_day (the newest column) and drop
-  // the account-scoped tables so they recreate with the current columns.
+  // account) and later a customizable theme color, a credit line due day, a
+  // closing day, and transactions gained a payment_method. Detect the old
+  // shape by the absence of accounts.closing_day (the newest column) and
+  // drop the account-scoped tables so they recreate with the current
+  // columns.
   await db.query(`
     DO $$ BEGIN
       IF EXISTS (
         SELECT 1 FROM information_schema.tables WHERE table_name = 'accounts'
       ) AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'accounts' AND column_name = 'credit_line_due_day'
+        WHERE table_name = 'accounts' AND column_name = 'closing_day'
       ) THEN
         DROP TABLE IF EXISTS cofrinho_movements, cofrinhos, transactions, accounts CASCADE;
       END IF;
@@ -149,6 +150,7 @@ async function runMigrations(db: Queryable) {
       has_credit_line BOOLEAN NOT NULL DEFAULT false,
       credit_limit DOUBLE PRECISION,
       credit_line_due_day INTEGER CHECK (credit_line_due_day BETWEEN 1 AND 31),
+      closing_day INTEGER CHECK (closing_day BETWEEN 1 AND 31),
       created_at TEXT NOT NULL DEFAULT (now())::text
     );
   `);

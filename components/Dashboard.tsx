@@ -137,6 +137,7 @@ export function Dashboard({
       has_credit_line: input.hasCreditLine,
       credit_limit: input.creditLimit,
       credit_line_due_day: input.creditLineDueDay,
+      closing_day: input.closingDay,
     };
   }
 
@@ -229,14 +230,16 @@ export function Dashboard({
           {creditLine && (
             <div className="mt-3 border-t border-zinc-100 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
               <p className="mb-1 font-medium text-zinc-600 dark:text-zinc-300">Linha de crédito</p>
-              <p>Gasto na fatura atual: {currencyFormatter.format(creditLine.usedThisMonth)}</p>
+              <p>Fatura fechada: {currencyFormatter.format(creditLine.closedInvoice)}</p>
+              <p>Fatura aberta: {currencyFormatter.format(creditLine.openInvoice)}</p>
               <p>
                 Limite disponível: {currencyFormatter.format(creditLine.availableLimit)} de{" "}
                 {currencyFormatter.format(creditLine.limit)}
               </p>
-              {creditLine.nextDueDate && (
-                <p>Próximo vencimento: {dateFormatter.format(new Date(`${creditLine.nextDueDate}T12:00:00`))}</p>
+              {creditLine.dueDate && (
+                <p>Vencimento da fatura fechada: {dateFormatter.format(new Date(`${creditLine.dueDate}T12:00:00`))}</p>
               )}
+              <p>Fecha em: {dateFormatter.format(new Date(`${creditLine.closingDate}T12:00:00`))}</p>
             </div>
           )}
         </div>

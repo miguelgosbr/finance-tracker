@@ -11,6 +11,7 @@ export interface AccountFormInput {
   hasCreditLine: boolean;
   creditLimit: number | null;
   creditLineDueDay: number | null;
+  closingDay: number | null;
 }
 
 export function AccountForm({
@@ -36,6 +37,9 @@ export function AccountForm({
   const [creditLineDueDay, setCreditLineDueDay] = useState(
     initial?.credit_line_due_day ? String(initial.credit_line_due_day) : ""
   );
+  const [closingDay, setClosingDay] = useState(
+    initial?.closing_day ? String(initial.closing_day) : ""
+  );
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -57,6 +61,7 @@ export function AccountForm({
         hasCreditLine,
         creditLimit: hasCreditLine ? Number(creditLimit) : null,
         creditLineDueDay: hasCreditLine && creditLineDueDay ? Number(creditLineDueDay) : null,
+        closingDay: hasCreditLine && closingDay ? Number(closingDay) : null,
       });
     } catch (error) {
       setStatus("error");
@@ -132,6 +137,20 @@ export function AccountForm({
               onChange={(event) => setCreditLimit(event.target.value)}
               placeholder="0,00"
               className="w-32 min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            Dia do fechamento
+            <input
+              type="number"
+              step="1"
+              min="1"
+              max="31"
+              value={closingDay}
+              onChange={(event) => setClosingDay(event.target.value)}
+              placeholder="Ex.: 3"
+              className="w-28 min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
             />
           </label>
 

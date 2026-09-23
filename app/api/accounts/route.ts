@@ -11,16 +11,32 @@ export async function GET() {
   return NextResponse.json(await listAccounts(user.id));
 }
 
+function parseDay(value: unknown, label: string) {
+  if (value === null || value === undefined) return { day: null } as const;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 31) {
+    return { error: `${label} deve ser um número entre 1 e 31.` } as const;
+  }
+  return { day: value } as const;
+}
+
 export function parseAccountInput(body: unknown) {
-  const { name, bank, bank_color, has_credit_line, credit_limit, credit_line_due_day } =
-    body as {
-      name?: unknown;
-      bank?: unknown;
-      bank_color?: unknown;
-      has_credit_line?: unknown;
-      credit_limit?: unknown;
-      credit_line_due_day?: unknown;
-    };
+  const {
+    name,
+    bank,
+    bank_color,
+    has_credit_line,
+    credit_limit,
+    credit_line_due_day,
+    closing_day,
+  } = body as {
+    name?: unknown;
+    bank?: unknown;
+    bank_color?: unknown;
+    has_credit_line?: unknown;
+    credit_limit?: unknown;
+    credit_line_due_day?: unknown;
+    closing_day?: unknown;
+  };
 
   if (typeof name !== "string" || name.trim().length === 0) {
     return { error: "O nome da conta é obrigatório." } as const;
@@ -38,6 +54,7 @@ export function parseAccountInput(body: unknown) {
 
   let creditLimit: number | null = null;
   let creditLineDueDay: number | null = null;
+  let closingDay: number | null = null;
 
   if (hasCreditLine) {
     if (typeof credit_limit !== "number" || !Number.isFinite(credit_limit) || credit_limit <= 0) {
@@ -47,17 +64,13 @@ export function parseAccountInput(body: unknown) {
     }
     creditLimit = credit_limit;
 
-    if (credit_line_due_day !== null && credit_line_due_day !== undefined) {
-      if (
-        typeof credit_line_due_day !== "number" ||
-        !Number.isInteger(credit_line_due_day) ||
-        credit_line_due_day < 1 ||
-        credit_line_due_day > 31
-      ) {
-        return { error: "O dia de vencimento deve ser um número entre 1 e 31." } as const;
-      }
-      creditLineDueDay = credit_line_due_day;
-    }
+    const dueDayResult = parseDay(credit_line_due_day, "O dia de vencimento");
+    if ("error" in dueDayResult) return { error: dueDayResult.error } as const;
+    creditLineDueDay = dueDayResult.day;
+
+    const closingDayResult = parseDay(closing_day, "O dia de fechamento");
+    if ("error" in closingDayResult) return { error: closingDayResult.error } as const;
+    closingDay = closingDayResult.day;
   }
 
   return {
@@ -68,6 +81,7 @@ export function parseAccountInput(body: unknown) {
       hasCreditLine,
       creditLimit,
       creditLineDueDay,
+      closingDay,
     },
   } as const;
 }

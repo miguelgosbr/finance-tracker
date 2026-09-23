@@ -50,6 +50,7 @@ export function EditorDashboard({
         has_credit_line: input.hasCreditLine,
         credit_limit: input.creditLimit,
         credit_line_due_day: input.creditLineDueDay,
+        closing_day: input.closingDay,
       }),
     });
 

@@ -152,7 +152,7 @@ export async function getBalanceForAccounts(accountIds: number[]): Promise<numbe
 
   // Expenses paid via a credit line don't leave the account's cash on hand
   // immediately — they accrue on the invoice instead, so they're excluded
-  // from the cash balance (see getCreditLineUsage for that tally).
+  // from the cash balance (see getCreditLineUsageBetween for that tally).
   const transactionsResult = await db.query<{ net: number }>(
     `SELECT
        COALESCE(SUM(
@@ -188,25 +188,19 @@ export async function getCurrentBalanceForUser(userId: number): Promise<number> 
   return getBalanceForAccounts(accountIdsResult.rows.map((row) => row.id));
 }
 
-/** Total spent via the credit line within the given reference month — the "current invoice". */
-export async function getCreditLineUsage(
+/** Total spent via the credit line within an inclusive date range (an invoice cycle). */
+export async function getCreditLineUsageBetween(
   accountId: number,
-  referenceDate: Date = new Date()
+  startInclusive: string,
+  endInclusive: string
 ): Promise<number> {
-  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
-  const monthEnd = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0)
-    .toISOString()
-    .slice(0, 10);
-
   const db = await getDb();
   const result = await db.query<{ total: number }>(
     `SELECT COALESCE(SUM(amount), 0) AS total
      FROM transactions
      WHERE account_id = $1 AND type = 'expense' AND payment_method = 'credit_line'
        AND occurred_on BETWEEN $2 AND $3`,
-    [accountId, monthStart, monthEnd]
+    [accountId, startInclusive, endInclusive]
   );
   return Number(result.rows[0].total);
 }
