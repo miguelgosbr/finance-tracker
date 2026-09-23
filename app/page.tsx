@@ -5,18 +5,29 @@ import { accrueAllYields, listCofrinhos } from "@/lib/cofrinhos";
 import { getTimeSeries } from "@/lib/reports";
 import { getCurrentBalance, listTransactions } from "@/lib/transactions";
 
-export default function Home() {
-  accrueAllYields();
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  await accrueAllYields();
+
+  const [categories, transactions, balance, burnRate, reportData, cofrinhos] = await Promise.all([
+    listCategories(),
+    listTransactions(),
+    getCurrentBalance(),
+    getBurnRateDiagnosis(),
+    getTimeSeries("month"),
+    listCofrinhos(),
+  ]);
 
   return (
     <Dashboard
-      initialCategories={listCategories()}
-      initialTransactions={listTransactions()}
-      initialBalance={getCurrentBalance()}
-      initialBurnRate={getBurnRateDiagnosis()}
+      initialCategories={categories}
+      initialTransactions={transactions}
+      initialBalance={balance}
+      initialBurnRate={burnRate}
       initialReportPeriod="month"
-      initialReportData={getTimeSeries("month")}
-      initialCofrinhos={listCofrinhos()}
+      initialReportData={reportData}
+      initialCofrinhos={cofrinhos}
     />
   );
 }

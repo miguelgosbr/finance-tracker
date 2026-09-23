@@ -4,7 +4,7 @@ import { createCategory, listCategories, type CategoryKind } from "@/lib/categor
 const VALID_KINDS: CategoryKind[] = ["income", "expense", "both"];
 
 export async function GET() {
-  return NextResponse.json(listCategories());
+  return NextResponse.json(await listCategories());
 }
 
 export async function POST(request: NextRequest) {
@@ -26,10 +26,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const category = createCategory(name, kind as CategoryKind);
+    const category = await createCategory(name, kind as CategoryKind);
     return NextResponse.json(category, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && error.message.includes("UNIQUE")) {
+    if (error && typeof error === "object" && "code" in error && error.code === "23505") {
       return NextResponse.json(
         { error: "Já existe uma categoria com esse nome." },
         { status: 409 }

@@ -16,8 +16,8 @@ export async function POST(
   const { id } = await params;
   const cofrinhoId = Number(id);
 
-  accrueAllYields();
-  const cofrinho = listCofrinhos().find((item) => item.id === cofrinhoId);
+  await accrueAllYields();
+  const cofrinho = (await listCofrinhos()).find((item) => item.id === cofrinhoId);
   if (!cofrinho) {
     return NextResponse.json({ error: "Cofrinho não encontrado." }, { status: 404 });
   }
@@ -46,13 +46,13 @@ export async function POST(
     );
   }
 
-  if (type === "deposit" && amount > getCurrentBalance()) {
+  if (type === "deposit" && amount > (await getCurrentBalance())) {
     return NextResponse.json(
       { error: "O valor do depósito não pode ser maior que o saldo disponível em conta." },
       { status: 400 }
     );
   }
 
-  const updated = recordMovement(cofrinhoId, type as CofrinhoMovementType, amount);
+  const updated = await recordMovement(cofrinhoId, type as CofrinhoMovementType, amount);
   return NextResponse.json(updated);
 }

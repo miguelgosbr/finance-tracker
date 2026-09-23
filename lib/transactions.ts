@@ -20,39 +20,37 @@ export interface NewTransaction {
   occurred_on: string;
 }
 
-export function listTransactions(): Transaction[] {
-  return getDb()
-    .prepare("SELECT * FROM transactions ORDER BY occurred_on DESC, id DESC")
-    .all() as Transaction[];
+export async function listTransactions(): Promise<Transaction[]> {
+  const db = await getDb();
+  const result = await db.query<Transaction>(
+    "SELECT * FROM transactions ORDER BY occurred_on DESC, id DESC"
+  );
+  return result.rows;
 }
 
-export function createTransaction(input: NewTransaction): Transaction {
-  const result = getDb()
-    .prepare(
-      `INSERT INTO transactions (type, amount, description, category_id, occurred_on)
-       VALUES (@type, @amount, @description, @category_id, @occurred_on)`
-    )
-    .run(input);
-
-  return getDb()
-    .prepare("SELECT * FROM transactions WHERE id = ?")
-    .get(result.lastInsertRowid) as Transaction;
+export async function createTransaction(input: NewTransaction): Promise<Transaction> {
+  const db = await getDb();
+  const result = await db.query<Transaction>(
+    `INSERT INTO transactions (type, amount, description, category_id, occurred_on)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [input.type, input.amount, input.description, input.category_id, input.occurred_on]
+  );
+  return result.rows[0];
 }
 
-export function getCurrentBalance(): number {
-  const db = getDb();
+export async function getCurrentBalance(): Promise<number> {
+  const db = await getDb();
 
-  const transactionsRow = db
-    .prepare(
-      `SELECT
-         COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0) as net
-       FROM transactions`
-    )
-    .get() as { net: number };
+  const transactionsResult = await db.query<{ net: number }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0) AS net
+     FROM transactions`
+  );
 
-  const cofrinhosRow = db
-    .prepare(`SELECT COALESCE(SUM(balance), 0) as total FROM cofrinhos`)
-    .get() as { total: number };
+  const cofrinhosResult = await db.query<{ total: number }>(
+    `SELECT COALESCE(SUM(balance), 0) AS total FROM cofrinhos`
+  );
 
-  return transactionsRow.net - cofrinhosRow.total;
+  return Number(transactionsResult.rows[0].net) - Number(cofrinhosResult.rows[0].total);
 }

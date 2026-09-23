@@ -9,18 +9,17 @@ export interface Category {
   created_at: string;
 }
 
-export function listCategories(): Category[] {
-  return getDb()
-    .prepare("SELECT * FROM categories ORDER BY name ASC")
-    .all() as Category[];
+export async function listCategories(): Promise<Category[]> {
+  const db = await getDb();
+  const result = await db.query<Category>("SELECT * FROM categories ORDER BY name ASC");
+  return result.rows;
 }
 
-export function createCategory(name: string, kind: CategoryKind): Category {
-  const result = getDb()
-    .prepare("INSERT INTO categories (name, kind) VALUES (?, ?)")
-    .run(name.trim(), kind);
-
-  return getDb()
-    .prepare("SELECT * FROM categories WHERE id = ?")
-    .get(result.lastInsertRowid) as Category;
+export async function createCategory(name: string, kind: CategoryKind): Promise<Category> {
+  const db = await getDb();
+  const result = await db.query<Category>(
+    "INSERT INTO categories (name, kind) VALUES ($1, $2) RETURNING *",
+    [name.trim(), kind]
+  );
+  return result.rows[0];
 }

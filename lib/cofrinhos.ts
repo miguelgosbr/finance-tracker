@@ -29,71 +29,61 @@ export interface CofrinhoWithYield extends Cofrinho {
   monthlyYield: number;
 }
 
-export function listCofrinhos(): CofrinhoWithYield[] {
-  const cofrinhos = getDb()
-    .prepare("SELECT * FROM cofrinhos ORDER BY name ASC")
-    .all() as Cofrinho[];
+export async function listCofrinhos(): Promise<CofrinhoWithYield[]> {
+  const db = await getDb();
+  const result = await db.query<Cofrinho>("SELECT * FROM cofrinhos ORDER BY name ASC");
 
-  return cofrinhos.map((cofrinho) => ({
-    ...cofrinho,
-    monthlyYield: getMonthlyYield(cofrinho.id),
-  }));
+  const cofrinhos: CofrinhoWithYield[] = [];
+  for (const cofrinho of result.rows) {
+    cofrinhos.push({ ...cofrinho, monthlyYield: await getMonthlyYield(cofrinho.id) });
+  }
+  return cofrinhos;
 }
 
-export function createCofrinho(
+export async function createCofrinho(
   name: string,
   cdiPercentage: number,
   goalAmount: number | null
-): Cofrinho {
-  const result = getDb()
-    .prepare(
-      "INSERT INTO cofrinhos (name, cdi_percentage, goal_amount) VALUES (?, ?, ?)"
-    )
-    .run(name.trim(), cdiPercentage, goalAmount);
-
-  return getDb()
-    .prepare("SELECT * FROM cofrinhos WHERE id = ?")
-    .get(result.lastInsertRowid) as Cofrinho;
+): Promise<Cofrinho> {
+  const db = await getDb();
+  const result = await db.query<Cofrinho>(
+    "INSERT INTO cofrinhos (name, cdi_percentage, goal_amount) VALUES ($1, $2, $3) RETURNING *",
+    [name.trim(), cdiPercentage, goalAmount]
+  );
+  return result.rows[0];
 }
 
-export function listMovements(cofrinhoId: number): CofrinhoMovement[] {
-  return getDb()
-    .prepare(
-      "SELECT * FROM cofrinho_movements WHERE cofrinho_id = ? ORDER BY occurred_on DESC, id DESC"
-    )
-    .all(cofrinhoId) as CofrinhoMovement[];
+export async function listMovements(cofrinhoId: number): Promise<CofrinhoMovement[]> {
+  const db = await getDb();
+  const result = await db.query<CofrinhoMovement>(
+    "SELECT * FROM cofrinho_movements WHERE cofrinho_id = $1 ORDER BY occurred_on DESC, id DESC",
+    [cofrinhoId]
+  );
+  return result.rows;
 }
 
-export function recordMovement(
+export async function recordMovement(
   cofrinhoId: number,
   type: CofrinhoMovementType,
   amount: number
-): Cofrinho {
-  const db = getDb();
+): Promise<Cofrinho> {
+  await accrueCofrinhoYield(cofrinhoId);
 
-  accrueCofrinhoYield(cofrinhoId);
+  const db = await getDb();
+  const delta = type === "withdrawal" ? -amount : amount;
 
-  const applyMovement = db.transaction(() => {
-    const delta = type === "withdrawal" ? -amount : amount;
-
-    db.prepare(
-      "INSERT INTO cofrinho_movements (cofrinho_id, type, amount) VALUES (?, ?, ?)"
-    ).run(cofrinhoId, type, amount);
-
-    db.prepare("UPDATE cofrinhos SET balance = balance + ? WHERE id = ?").run(
-      delta,
-      cofrinhoId
-    );
-  });
-
-  applyMovement();
-
-  return db.prepare("SELECT * FROM cofrinhos WHERE id = ?").get(cofrinhoId) as Cofrinho;
+  const result = await db.query<Cofrinho>(
+    `WITH inserted AS (
+       INSERT INTO cofrinho_movements (cofrinho_id, type, amount) VALUES ($1, $2, $3)
+     )
+     UPDATE cofrinhos SET balance = balance + $4 WHERE id = $1 RETURNING *`,
+    [cofrinhoId, type, amount, delta]
+  );
+  return result.rows[0];
 }
 
-function getAnnualCdiRate(): number {
-  const configured = Number(getSetting("cdi_rate_annual"));
-  if (Number.isFinite(configured) && configured > 0) return configured / 100;
+function getAnnualCdiRate(rate: number | null): number {
+  if (rate !== null && Number.isFinite(rate) && rate > 0) return rate / 100;
   return DEFAULT_CDI_ANNUAL / 100;
 }
 
@@ -118,12 +108,15 @@ function countBusinessDays(startExclusive: string, endInclusive: string): number
   return count;
 }
 
-export function accrueCofrinhoYield(cofrinhoId: number, referenceDate: Date = new Date()): void {
-  const db = getDb();
-  const cofrinho = db
-    .prepare("SELECT * FROM cofrinhos WHERE id = ?")
-    .get(cofrinhoId) as Cofrinho | undefined;
-
+export async function accrueCofrinhoYield(
+  cofrinhoId: number,
+  referenceDate: Date = new Date()
+): Promise<void> {
+  const db = await getDb();
+  const cofrinhoResult = await db.query<Cofrinho>("SELECT * FROM cofrinhos WHERE id = $1", [
+    cofrinhoId,
+  ]);
+  const cofrinho = cofrinhoResult.rows[0];
   if (!cofrinho) return;
 
   const today = toIsoDate(referenceDate);
@@ -131,52 +124,60 @@ export function accrueCofrinhoYield(cofrinhoId: number, referenceDate: Date = ne
 
   if (businessDays <= 0 || cofrinho.balance <= 0) {
     if (today > cofrinho.last_accrued_on) {
-      db.prepare("UPDATE cofrinhos SET last_accrued_on = ? WHERE id = ?").run(today, cofrinhoId);
+      await db.query("UPDATE cofrinhos SET last_accrued_on = $1 WHERE id = $2", [
+        today,
+        cofrinhoId,
+      ]);
     }
     return;
   }
 
-  const effectiveAnnualRate = getAnnualCdiRate() * (cofrinho.cdi_percentage / 100);
+  const cdiRateSetting = await getSetting("cdi_rate_annual");
+  const effectiveAnnualRate =
+    getAnnualCdiRate(cdiRateSetting === null ? null : Number(cdiRateSetting)) *
+    (cofrinho.cdi_percentage / 100);
   const dailyFactor = Math.pow(1 + effectiveAnnualRate, 1 / BUSINESS_DAYS_PER_YEAR);
   const yieldAmount = cofrinho.balance * (Math.pow(dailyFactor, businessDays) - 1);
   const roundedYield = Math.round(yieldAmount * 100) / 100;
 
-  const applyYield = db.transaction(() => {
-    if (roundedYield > 0) {
-      db.prepare(
-        "INSERT INTO cofrinho_movements (cofrinho_id, type, amount, occurred_on) VALUES (?, 'yield', ?, ?)"
-      ).run(cofrinhoId, roundedYield, today);
-      db.prepare("UPDATE cofrinhos SET balance = balance + ? WHERE id = ?").run(
-        roundedYield,
-        cofrinhoId
-      );
-    }
-    db.prepare("UPDATE cofrinhos SET last_accrued_on = ? WHERE id = ?").run(today, cofrinhoId);
-  });
-
-  applyYield();
-}
-
-export function accrueAllYields(referenceDate: Date = new Date()): void {
-  const ids = getDb().prepare("SELECT id FROM cofrinhos").all() as { id: number }[];
-  for (const { id } of ids) {
-    accrueCofrinhoYield(id, referenceDate);
+  if (roundedYield > 0) {
+    await db.query(
+      `WITH inserted AS (
+         INSERT INTO cofrinho_movements (cofrinho_id, type, amount, occurred_on)
+         VALUES ($1, 'yield', $2, $3)
+       )
+       UPDATE cofrinhos SET balance = balance + $2, last_accrued_on = $3 WHERE id = $1`,
+      [cofrinhoId, roundedYield, today]
+    );
+  } else {
+    await db.query("UPDATE cofrinhos SET last_accrued_on = $1 WHERE id = $2", [today, cofrinhoId]);
   }
 }
 
-export function getMonthlyYield(cofrinhoId: number, referenceDate: Date = new Date()): number {
+export async function accrueAllYields(referenceDate: Date = new Date()): Promise<void> {
+  const db = await getDb();
+  const result = await db.query<{ id: number }>("SELECT id FROM cofrinhos");
+  for (const { id } of result.rows) {
+    await accrueCofrinhoYield(id, referenceDate);
+  }
+}
+
+export async function getMonthlyYield(
+  cofrinhoId: number,
+  referenceDate: Date = new Date()
+): Promise<number> {
   const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)
     .toISOString()
     .slice(0, 10);
   const today = toIsoDate(referenceDate);
 
-  const row = getDb()
-    .prepare(
-      `SELECT COALESCE(SUM(amount), 0) as total
-       FROM cofrinho_movements
-       WHERE cofrinho_id = ? AND type = 'yield' AND occurred_on BETWEEN ? AND ?`
-    )
-    .get(cofrinhoId, monthStart, today) as { total: number };
+  const db = await getDb();
+  const result = await db.query<{ total: number }>(
+    `SELECT COALESCE(SUM(amount), 0) AS total
+     FROM cofrinho_movements
+     WHERE cofrinho_id = $1 AND type = 'yield' AND occurred_on BETWEEN $2 AND $3`,
+    [cofrinhoId, monthStart, today]
+  );
 
-  return row.total;
+  return Number(result.rows[0].total);
 }

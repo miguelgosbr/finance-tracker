@@ -9,67 +9,72 @@ import {
 import { getDb } from "@/lib/db";
 import { setSetting } from "@/lib/settings";
 
+const AT_ACCRUAL = new Date("2026-09-08T12:00:00");
+
 // 2026-09-01 and 2026-09-08 are both Tuesdays, so 5 business days elapse
 // between them (Wed, Thu, Fri, Mon, Tue).
-function setupCofrinho(balance: number, cdiPercentage: number) {
-  setSetting("cdi_rate_annual", "10");
-  const cofrinho = createCofrinho("Reserva", cdiPercentage, null);
-  recordMovement(cofrinho.id, "deposit", balance);
-  getDb()
-    .prepare("UPDATE cofrinhos SET last_accrued_on = ? WHERE id = ?")
-    .run("2026-09-01", cofrinho.id);
+async function setupCofrinho(balance: number, cdiPercentage: number) {
+  await setSetting("cdi_rate_annual", "10");
+  const cofrinho = await createCofrinho("Reserva", cdiPercentage, null);
+  await recordMovement(cofrinho.id, "deposit", balance);
+  const db = await getDb();
+  await db.query("UPDATE cofrinhos SET last_accrued_on = $1 WHERE id = $2", [
+    "2026-09-01",
+    cofrinho.id,
+  ]);
   return cofrinho.id;
 }
 
 describe("cofrinho CDI yield", () => {
-  it("accrues compound interest over business days", () => {
-    const id = setupCofrinho(1000, 100);
+  it("accrues compound interest over business days", async () => {
+    const id = await setupCofrinho(1000, 100);
 
-    accrueCofrinhoYield(id, new Date("2026-09-08T12:00:00"));
+    await accrueCofrinhoYield(id, AT_ACCRUAL);
 
     // 1000 * (1.10^(5/252) - 1) ≈ 1.89
     const expected = Math.round(1000 * (Math.pow(1.1, 5 / 252) - 1) * 100) / 100;
     expect(expected).toBeCloseTo(1.89, 2);
 
-    const [cofrinho] = listCofrinhos();
+    const [cofrinho] = await listCofrinhos();
     expect(cofrinho.balance).toBeCloseTo(1000 + expected, 5);
-    expect(getMonthlyYield(id, new Date("2026-09-08T12:00:00"))).toBeCloseTo(expected, 5);
+    expect(await getMonthlyYield(id, AT_ACCRUAL)).toBeCloseTo(expected, 5);
   });
 
-  it("scales the yield by the cofrinho's CDI percentage", () => {
-    const id100 = setupCofrinho(1000, 100);
-    accrueCofrinhoYield(id100, new Date("2026-09-08T12:00:00"));
-    const yield100 = getMonthlyYield(id100, new Date("2026-09-08T12:00:00"));
+  it("scales the yield by the cofrinho's CDI percentage", async () => {
+    const id100 = await setupCofrinho(1000, 100);
+    await accrueCofrinhoYield(id100, AT_ACCRUAL);
+    const yield100 = await getMonthlyYield(id100, AT_ACCRUAL);
 
-    // Fresh DB for the 115% case.
-    const id115 = setupCofrinho(1000, 115);
-    accrueCofrinhoYield(id115, new Date("2026-09-08T12:00:00"));
-    const yield115 = getMonthlyYield(id115, new Date("2026-09-08T12:00:00"));
+    const id115 = await setupCofrinho(1000, 115);
+    await accrueCofrinhoYield(id115, AT_ACCRUAL);
+    const yield115 = await getMonthlyYield(id115, AT_ACCRUAL);
 
     expect(yield115).toBeGreaterThan(yield100);
   });
 
-  it("is idempotent for the same day", () => {
-    const id = setupCofrinho(1000, 100);
+  it("is idempotent for the same day", async () => {
+    const id = await setupCofrinho(1000, 100);
 
-    accrueCofrinhoYield(id, new Date("2026-09-08T12:00:00"));
-    const afterFirst = listCofrinhos()[0].balance;
+    await accrueCofrinhoYield(id, AT_ACCRUAL);
+    const afterFirst = (await listCofrinhos())[0].balance;
 
-    accrueCofrinhoYield(id, new Date("2026-09-08T12:00:00"));
-    const afterSecond = listCofrinhos()[0].balance;
+    await accrueCofrinhoYield(id, AT_ACCRUAL);
+    const afterSecond = (await listCofrinhos())[0].balance;
 
     expect(afterSecond).toBe(afterFirst);
   });
 
-  it("does not accrue on a zero balance", () => {
-    setSetting("cdi_rate_annual", "10");
-    const cofrinho = createCofrinho("Vazio", 100, null);
-    getDb()
-      .prepare("UPDATE cofrinhos SET last_accrued_on = ? WHERE id = ?")
-      .run("2026-09-01", cofrinho.id);
+  it("does not accrue on a zero balance", async () => {
+    await setSetting("cdi_rate_annual", "10");
+    const cofrinho = await createCofrinho("Vazio", 100, null);
+    const db = await getDb();
+    await db.query("UPDATE cofrinhos SET last_accrued_on = $1 WHERE id = $2", [
+      "2026-09-01",
+      cofrinho.id,
+    ]);
 
-    accrueCofrinhoYield(cofrinho.id, new Date("2026-09-08T12:00:00"));
+    await accrueCofrinhoYield(cofrinho.id, AT_ACCRUAL);
 
-    expect(listCofrinhos()[0].balance).toBe(0);
+    expect((await listCofrinhos())[0].balance).toBe(0);
   });
 });

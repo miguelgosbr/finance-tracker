@@ -13,5 +13,5 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return NextResponse.json(getTimeSeries(period as ReportPeriod));
+  return NextResponse.json(await getTimeSeries(period as ReportPeriod));
 }

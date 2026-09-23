@@ -11,10 +11,10 @@ const VALID_TYPES: TransactionType[] = ["income", "expense"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET() {
-  accrueAllYields();
+  await accrueAllYields();
   return NextResponse.json({
-    transactions: listTransactions(),
-    balance: getCurrentBalance(),
+    transactions: await listTransactions(),
+    balance: await getCurrentBalance(),
   });
 }
 
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const transaction = createTransaction({
+    const transaction = await createTransaction({
       type: type as TransactionType,
       amount,
       description: description.trim(),
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json(transaction, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && error.message.includes("FOREIGN KEY")) {
+    if (error && typeof error === "object" && "code" in error && error.code === "23503") {
       return NextResponse.json(
         { error: "Categoria inválida." },
         { status: 400 }

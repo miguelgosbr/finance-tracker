@@ -6,7 +6,7 @@ const SALARY_CATEGORY = 9;
 const FOOD_CATEGORY = 1;
 
 function addIncome(amount: number) {
-  createTransaction({
+  return createTransaction({
     type: "income",
     amount,
     description: "receita",
@@ -16,7 +16,7 @@ function addIncome(amount: number) {
 }
 
 function addExpense(amount: number) {
-  createTransaction({
+  return createTransaction({
     type: "expense",
     amount,
     description: "gasto",
@@ -26,35 +26,35 @@ function addExpense(amount: number) {
 }
 
 describe("getCurrentBalance", () => {
-  it("starts at zero with no transactions", () => {
-    expect(getCurrentBalance()).toBe(0);
+  it("starts at zero with no transactions", async () => {
+    expect(await getCurrentBalance()).toBe(0);
   });
 
-  it("is income minus expenses", () => {
-    addIncome(1000);
-    addExpense(250);
-    addExpense(150);
-    expect(getCurrentBalance()).toBe(600);
+  it("is income minus expenses", async () => {
+    await addIncome(1000);
+    await addExpense(250);
+    await addExpense(150);
+    expect(await getCurrentBalance()).toBe(600);
   });
 
-  it("subtracts money allocated to cofrinhos", () => {
-    addIncome(1000);
-    const cofrinho = createCofrinho("Reserva", 100, null);
-    recordMovement(cofrinho.id, "deposit", 300);
-    expect(getCurrentBalance()).toBe(700);
+  it("subtracts money allocated to cofrinhos", async () => {
+    await addIncome(1000);
+    const cofrinho = await createCofrinho("Reserva", 100, null);
+    await recordMovement(cofrinho.id, "deposit", 300);
+    expect(await getCurrentBalance()).toBe(700);
   });
 
-  it("gives money back when withdrawing from a cofrinho", () => {
-    addIncome(1000);
-    const cofrinho = createCofrinho("Reserva", 100, null);
-    recordMovement(cofrinho.id, "deposit", 300);
-    recordMovement(cofrinho.id, "withdrawal", 100);
-    expect(getCurrentBalance()).toBe(800);
+  it("gives money back when withdrawing from a cofrinho", async () => {
+    await addIncome(1000);
+    const cofrinho = await createCofrinho("Reserva", 100, null);
+    await recordMovement(cofrinho.id, "deposit", 300);
+    await recordMovement(cofrinho.id, "withdrawal", 100);
+    expect(await getCurrentBalance()).toBe(800);
   });
 
-  it("can be negative when expenses exceed income", () => {
-    addIncome(100);
-    addExpense(250);
-    expect(getCurrentBalance()).toBe(-150);
+  it("can be negative when expenses exceed income", async () => {
+    await addIncome(100);
+    await addExpense(250);
+    expect(await getCurrentBalance()).toBe(-150);
   });
 });

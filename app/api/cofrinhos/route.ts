@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { accrueAllYields, createCofrinho, listCofrinhos } from "@/lib/cofrinhos";
 
 export async function GET() {
-  accrueAllYields();
-  return NextResponse.json(listCofrinhos());
+  await accrueAllYields();
+  return NextResponse.json(await listCofrinhos());
 }
 
 export async function POST(request: NextRequest) {
@@ -39,6 +39,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const cofrinho = createCofrinho(name, cdi_percentage, goal_amount ?? null);
+  const cofrinho = await createCofrinho(name, cdi_percentage, goal_amount ?? null);
   return NextResponse.json(cofrinho, { status: 201 });
 }
