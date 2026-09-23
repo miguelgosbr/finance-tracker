@@ -61,7 +61,7 @@ export function TransactionForm({ type, categories, onCreated }: TransactionForm
     categories[0] ? String(categories[0].id) : NEW_CATEGORY_VALUE
   );
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
   const isCreatingCategory = categoryId === NEW_CATEGORY_VALUE;
@@ -114,7 +114,8 @@ export function TransactionForm({ type, categories, onCreated }: TransactionForm
       setDescription("");
       setNewCategoryName("");
       setOccurredOn(today());
-      setStatus("idle");
+      setStatus("success");
+      window.setTimeout(() => setStatus("idle"), 2500);
       onCreated();
     } catch (error) {
       setStatus("error");
@@ -197,6 +198,12 @@ export function TransactionForm({ type, categories, onCreated }: TransactionForm
 
       {status === "error" && (
         <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
+      )}
+
+      {status === "success" && (
+        <p className="text-sm font-medium text-green-600 dark:text-green-400">
+          ✓ Lançamento registrado!
+        </p>
       )}
 
       <button

@@ -43,6 +43,7 @@ export function Dashboard({
   const [reportData, setReportData] = useState(initialReportData);
   const [isReportLoading, setIsReportLoading] = useState(false);
   const [cofrinhos, setCofrinhos] = useState(initialCofrinhos);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   async function loadReports(period: ReportPeriod) {
     setIsReportLoading(true);
@@ -71,25 +72,40 @@ export function Dashboard({
   }
 
   async function refresh() {
-    const [categoriesResponse, transactionsResponse, burnRateResponse] = await Promise.all([
-      fetch("/api/categories"),
-      fetch("/api/transactions"),
-      fetch("/api/analytics/burn-rate"),
-      loadReports(reportPeriod),
-    ]);
-    setCategories(await categoriesResponse.json());
-    const transactionsData = await transactionsResponse.json();
-    setTransactions(transactionsData.transactions);
-    setBalance(transactionsData.balance);
-    setBurnRate(await burnRateResponse.json());
+    setIsRefreshing(true);
+    try {
+      const [categoriesResponse, transactionsResponse, burnRateResponse] = await Promise.all([
+        fetch("/api/categories"),
+        fetch("/api/transactions"),
+        fetch("/api/analytics/burn-rate"),
+        loadReports(reportPeriod),
+      ]);
+      setCategories(await categoriesResponse.json());
+      const transactionsData = await transactionsResponse.json();
+      setTransactions(transactionsData.transactions);
+      setBalance(transactionsData.balance);
+      setBurnRate(await burnRateResponse.json());
+    } finally {
+      setIsRefreshing(false);
+    }
   }
 
   const expenseCategories = categories.filter((category) => category.kind !== "income");
   const incomeCategories = categories.filter((category) => category.kind !== "expense");
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-zinc-50 px-4 py-12 dark:bg-black">
-      <main className="flex w-full max-w-2xl flex-col gap-6">
+    <div className="flex min-h-screen flex-col items-center bg-zinc-50 px-4 py-8 sm:py-12 dark:bg-black">
+      <main className="flex w-full max-w-2xl flex-col gap-5 sm:gap-6">
+        <header className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Finanças</h1>
+          {isRefreshing && (
+            <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-600" />
+              Atualizando…
+            </span>
+          )}
+        </header>
+
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-sm text-zinc-500 dark:text-zinc-400">Saldo atual</p>
           <p className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
