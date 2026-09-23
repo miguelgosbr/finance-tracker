@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listCofrinhos, recordMovement, type CofrinhoMovementType } from "@/lib/cofrinhos";
+import {
+  accrueAllYields,
+  listCofrinhos,
+  recordMovement,
+  type CofrinhoMovementType,
+} from "@/lib/cofrinhos";
 import { getCurrentBalance } from "@/lib/transactions";
 
 const VALID_TYPES: CofrinhoMovementType[] = ["deposit", "withdrawal"];
@@ -11,6 +16,7 @@ export async function POST(
   const { id } = await params;
   const cofrinhoId = Number(id);
 
+  accrueAllYields();
   const cofrinho = listCofrinhos().find((item) => item.id === cofrinhoId);
   if (!cofrinho) {
     return NextResponse.json({ error: "Cofrinho não encontrado." }, { status: 404 });

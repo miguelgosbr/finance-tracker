@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { accrueAllYields } from "@/lib/cofrinhos";
 import {
   createTransaction,
   getCurrentBalance,
@@ -10,6 +11,7 @@ const VALID_TYPES: TransactionType[] = ["income", "expense"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET() {
+  accrueAllYields();
   return NextResponse.json({
     transactions: listTransactions(),
     balance: getCurrentBalance(),

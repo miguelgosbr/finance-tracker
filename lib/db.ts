@@ -26,6 +26,8 @@ const DEFAULT_SETTINGS: Record<string, string> = {
 let db: Database.Database | null = null;
 
 function resolveDbPath(): string {
+  if (process.env.DATABASE_PATH === ":memory:") return ":memory:";
+
   const filename = process.env.DATABASE_PATH
     ? path.basename(process.env.DATABASE_PATH)
     : DEFAULT_DB_FILENAME;
@@ -113,10 +115,19 @@ export function getDb(): Database.Database {
   if (db) return db;
 
   const dbPath = resolveDbPath();
-  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  if (dbPath !== ":memory:") {
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  }
 
   db = new Database(dbPath);
   runMigrations(db);
 
   return db;
+}
+
+export function closeDb(): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
 }

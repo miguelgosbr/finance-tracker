@@ -30,7 +30,6 @@ export interface CofrinhoWithYield extends Cofrinho {
 }
 
 export function listCofrinhos(): CofrinhoWithYield[] {
-  accrueAllYields();
   const cofrinhos = getDb()
     .prepare("SELECT * FROM cofrinhos ORDER BY name ASC")
     .all() as Cofrinho[];

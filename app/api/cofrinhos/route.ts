@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createCofrinho, listCofrinhos } from "@/lib/cofrinhos";
+import { accrueAllYields, createCofrinho, listCofrinhos } from "@/lib/cofrinhos";
 
 export async function GET() {
+  accrueAllYields();
   return NextResponse.json(listCofrinhos());
 }
 
