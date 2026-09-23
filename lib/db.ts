@@ -29,8 +29,20 @@ const DEFAULT_SETTINGS: Record<string, string> = {
 
 let dbPromise: Promise<Queryable> | null = null;
 
+function getConnectionString(): string | undefined {
+  return process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+}
+
 function shouldUsePglite(): boolean {
-  return process.env.NODE_ENV === "test" || !process.env.DATABASE_URL;
+  if (process.env.NODE_ENV === "test") return true;
+  if (getConnectionString()) return false;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "DATABASE_URL is not set. A PostgreSQL connection string is required in production."
+    );
+  }
+  // Local development without a database: use an in-memory PGlite instance.
+  return true;
 }
 
 async function createClient(): Promise<Queryable> {
@@ -44,7 +56,7 @@ async function createClient(): Promise<Queryable> {
   }
 
   const { Pool } = await import("pg");
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = getConnectionString();
   const pool: PgPool = new Pool({
     connectionString,
     ssl:
