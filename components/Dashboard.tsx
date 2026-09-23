@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { BurnRateCard } from "@/components/BurnRateCard";
+import { CofrinhosSection } from "@/components/CofrinhosSection";
 import { ReportsChart } from "@/components/ReportsChart";
 import { TransactionForm } from "@/components/TransactionForm";
 import type { BurnRateDiagnosis } from "@/lib/analytics";
 import type { Category } from "@/lib/categories";
+import type { Cofrinho } from "@/lib/cofrinhos";
 import type { ReportPeriod, ReportPoint } from "@/lib/reports";
 import type { Transaction } from "@/lib/transactions";
 
@@ -21,6 +23,7 @@ interface DashboardProps {
   initialBurnRate: BurnRateDiagnosis;
   initialReportPeriod: ReportPeriod;
   initialReportData: ReportPoint[];
+  initialCofrinhos: Cofrinho[];
 }
 
 export function Dashboard({
@@ -30,6 +33,7 @@ export function Dashboard({
   initialBurnRate,
   initialReportPeriod,
   initialReportData,
+  initialCofrinhos,
 }: DashboardProps) {
   const [categories, setCategories] = useState(initialCategories);
   const [transactions, setTransactions] = useState(initialTransactions);
@@ -38,6 +42,7 @@ export function Dashboard({
   const [reportPeriod, setReportPeriod] = useState(initialReportPeriod);
   const [reportData, setReportData] = useState(initialReportData);
   const [isReportLoading, setIsReportLoading] = useState(false);
+  const [cofrinhos, setCofrinhos] = useState(initialCofrinhos);
 
   async function loadReports(period: ReportPeriod) {
     setIsReportLoading(true);
@@ -53,6 +58,16 @@ export function Dashboard({
     if (period === reportPeriod) return;
     setReportPeriod(period);
     await loadReports(period);
+  }
+
+  async function refreshCofrinhos() {
+    const [cofrinhosResponse, transactionsResponse] = await Promise.all([
+      fetch("/api/cofrinhos"),
+      fetch("/api/transactions"),
+    ]);
+    setCofrinhos(await cofrinhosResponse.json());
+    const transactionsData = await transactionsResponse.json();
+    setBalance(transactionsData.balance);
   }
 
   async function refresh() {
@@ -83,6 +98,8 @@ export function Dashboard({
         </div>
 
         <BurnRateCard diagnosis={burnRate} />
+
+        <CofrinhosSection cofrinhos={cofrinhos} onChanged={refreshCofrinhos} />
 
         <ReportsChart
           period={reportPeriod}
