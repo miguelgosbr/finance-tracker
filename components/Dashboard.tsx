@@ -3,16 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AccountTabs, type AccountFormInput } from "@/components/AccountTabs";
-import { BANK_THEME, hexToRgba } from "@/components/bankTheme";
+import { getAccountTheme, hexToRgba } from "@/components/bankTheme";
 import { BurnRateCard } from "@/components/BurnRateCard";
 import { CofrinhosSection } from "@/components/CofrinhosSection";
 import { ReportsChart } from "@/components/ReportsChart";
 import { SettingsSection, type Settings } from "@/components/SettingsSection";
 import { TransactionForm } from "@/components/TransactionForm";
+import { TransactionRow } from "@/components/TransactionRow";
 import type { Account } from "@/lib/accounts";
 import type { BurnRateDiagnosis } from "@/lib/analytics";
 import type { Category } from "@/lib/categories";
 import type { CofrinhoWithAccount } from "@/lib/cofrinhos";
+import type { CreditLineStatus } from "@/lib/creditLine";
 import type { ReportPeriod, ReportPoint } from "@/lib/reports";
 import type { TransactionWithAccount } from "@/lib/transactions";
 
@@ -20,6 +22,8 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+
+const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" });
 
 interface DashboardProps {
   user: { id: number; email: string };
@@ -33,6 +37,7 @@ interface DashboardProps {
   initialReportData: ReportPoint[];
   initialCofrinhos: CofrinhoWithAccount[];
   initialSettings: Settings;
+  initialCreditLine: CreditLineStatus | null;
 }
 
 export function Dashboard({
@@ -47,6 +52,7 @@ export function Dashboard({
   initialReportData,
   initialCofrinhos,
   initialSettings,
+  initialCreditLine,
 }: DashboardProps) {
   const router = useRouter();
 
@@ -60,23 +66,34 @@ export function Dashboard({
   const [reportData, setReportData] = useState(initialReportData);
   const [isReportLoading, setIsReportLoading] = useState(false);
   const [cofrinhos, setCofrinhos] = useState(initialCofrinhos);
+  const [creditLine, setCreditLine] = useState(initialCreditLine);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isAll = scope === "all";
   const currentAccountId = isAll ? null : Number(scope);
   const currentAccount = accounts.find((account) => account.id === currentAccountId) ?? null;
-  const theme = currentAccount ? BANK_THEME[currentAccount.bank] : null;
+  const theme = currentAccount ? getAccountTheme(currentAccount) : null;
+
+  function accountById(accountId: number): Account | undefined {
+    return accounts.find((account) => account.id === accountId);
+  }
 
   async function loadScopeData(targetScope: string, period: ReportPeriod) {
     setIsRefreshing(true);
     try {
       const qs = `account=${targetScope}`;
-      const [transactionsResponse, burnRateResponse, cofrinhosResponse, reportResponse] =
+      const targetAccountId = targetScope === "all" ? null : Number(targetScope);
+      const targetAccount = targetAccountId !== null ? accountById(targetAccountId) : null;
+
+      const [transactionsResponse, burnRateResponse, cofrinhosResponse, reportResponse, creditLineResponse] =
         await Promise.all([
           fetch(`/api/transactions?${qs}`),
           fetch(`/api/analytics/burn-rate?${qs}`),
           fetch(`/api/cofrinhos?${qs}`),
           fetch(`/api/reports?period=${period}&${qs}`),
+          targetAccount?.has_credit_line
+            ? fetch(`/api/accounts/${targetAccount.id}/credit-line`)
+            : Promise.resolve(null),
         ]);
 
       const transactionsData = await transactionsResponse.json();
@@ -85,6 +102,7 @@ export function Dashboard({
       setBurnRate(await burnRateResponse.json());
       setCofrinhos(await cofrinhosResponse.json());
       setReportData(await reportResponse.json());
+      setCreditLine(creditLineResponse ? await creditLineResponse.json() : null);
     } finally {
       setIsRefreshing(false);
     }
@@ -118,8 +136,10 @@ export function Dashboard({
     return {
       name: input.name,
       bank: input.bank,
+      bank_color: input.bankColor,
       has_credit_line: input.hasCreditLine,
       credit_limit: input.creditLimit,
+      credit_line_due_day: input.creditLineDueDay,
     };
   }
 
@@ -155,6 +175,10 @@ export function Dashboard({
     setAccounts((previous) =>
       previous.map((account) => (account.id === accountId ? data : account))
     );
+
+    if (String(accountId) === scope) {
+      await loadScopeData(scope, reportPeriod);
+    }
   }
 
   async function handleDeleteAccount(accountId: number) {
@@ -187,16 +211,13 @@ export function Dashboard({
   const incomeCategories = categories.filter((category) => category.kind !== "expense");
 
   return (
-    <div
-      className="flex min-h-screen flex-col items-center bg-zinc-50 px-4 py-8 transition-colors duration-300 sm:py-12 dark:bg-black"
-      style={
-        theme
-          ? {
-              backgroundImage: `linear-gradient(180deg, ${hexToRgba(theme.color, 0.16)}, transparent 420px)`,
-            }
-          : undefined
-      }
-    >
+    <div className="relative flex min-h-screen flex-col items-center bg-zinc-50 px-4 py-8 sm:py-12 dark:bg-black">
+      {theme && (
+        <div
+          className="pointer-events-none fixed inset-0 -z-10 transition-colors duration-300"
+          style={{ backgroundColor: hexToRgba(theme.color, 0.14) }}
+        />
+      )}
       <main className="flex w-full max-w-2xl flex-col gap-5 sm:gap-6">
         <header className="flex flex-wrap items-center justify-between gap-2">
           <h1
@@ -242,10 +263,19 @@ export function Dashboard({
           <p className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
             {currencyFormatter.format(balance)}
           </p>
-          {currentAccount?.has_credit_line && (
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              Linha de crédito: limite de {currencyFormatter.format(currentAccount.credit_limit ?? 0)}
-            </p>
+
+          {creditLine && (
+            <div className="mt-3 border-t border-zinc-100 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+              <p className="mb-1 font-medium text-zinc-600 dark:text-zinc-300">Linha de crédito</p>
+              <p>Gasto na fatura atual: {currencyFormatter.format(creditLine.usedThisMonth)}</p>
+              <p>
+                Limite disponível: {currencyFormatter.format(creditLine.availableLimit)} de{" "}
+                {currencyFormatter.format(creditLine.limit)}
+              </p>
+              {creditLine.nextDueDate && (
+                <p>Próximo vencimento: {dateFormatter.format(new Date(`${creditLine.nextDueDate}T12:00:00`))}</p>
+              )}
+            </div>
           )}
         </div>
 
@@ -266,7 +296,7 @@ export function Dashboard({
           onPeriodChange={selectReportPeriod}
         />
 
-        {isAll || currentAccountId === null ? (
+        {isAll || currentAccountId === null || !currentAccount ? (
           <p className="text-center text-sm text-zinc-400">
             Para registrar um gasto ou receita, selecione uma conta específica acima.
           </p>
@@ -275,12 +305,14 @@ export function Dashboard({
             <TransactionForm
               type="expense"
               accountId={currentAccountId}
+              hasCreditLine={currentAccount.has_credit_line}
               categories={expenseCategories}
               onCreated={refresh}
             />
             <TransactionForm
               type="income"
               accountId={currentAccountId}
+              hasCreditLine={false}
               categories={incomeCategories}
               onCreated={refresh}
             />
@@ -293,29 +325,14 @@ export function Dashboard({
           </h2>
           <ul className="flex flex-col gap-2">
             {transactions.slice(0, 10).map((transaction) => (
-              <li
+              <TransactionRow
                 key={transaction.id}
-                className="flex items-center justify-between text-sm"
-              >
-                <span className="text-zinc-600 dark:text-zinc-400">
-                  {transaction.description}
-                  {isAll && (
-                    <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                      {transaction.account_name}
-                    </span>
-                  )}
-                </span>
-                <span
-                  className={
-                    transaction.type === "income"
-                      ? "font-medium text-green-600 dark:text-green-400"
-                      : "font-medium text-red-600 dark:text-red-400"
-                  }
-                >
-                  {transaction.type === "income" ? "+" : "-"}
-                  {currencyFormatter.format(transaction.amount)}
-                </span>
-              </li>
+                transaction={transaction}
+                categories={categories}
+                showAccountName={isAll}
+                hasCreditLine={accountById(transaction.account_id)?.has_credit_line ?? false}
+                onChanged={refresh}
+              />
             ))}
             {transactions.length === 0 && (
               <li className="text-sm text-zinc-400">Nenhum lançamento ainda.</li>

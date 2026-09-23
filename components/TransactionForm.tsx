@@ -48,11 +48,18 @@ const COPY: Record<
 interface TransactionFormProps {
   type: TransactionType;
   accountId: number;
+  hasCreditLine: boolean;
   categories: Category[];
   onCreated: () => void;
 }
 
-export function TransactionForm({ type, accountId, categories, onCreated }: TransactionFormProps) {
+export function TransactionForm({
+  type,
+  accountId,
+  hasCreditLine,
+  categories,
+  onCreated,
+}: TransactionFormProps) {
   const copy = COPY[type];
 
   const [amount, setAmount] = useState("");
@@ -62,6 +69,7 @@ export function TransactionForm({ type, accountId, categories, onCreated }: Tran
     categories[0] ? String(categories[0].id) : NEW_CATEGORY_VALUE
   );
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_line">("account");
   const [status, setStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -104,6 +112,7 @@ export function TransactionForm({ type, accountId, categories, onCreated }: Tran
           description,
           category_id: Number(resolvedCategoryId),
           occurred_on: occurredOn,
+          payment_method: type === "expense" ? paymentMethod : "account",
         }),
       });
 
@@ -116,6 +125,7 @@ export function TransactionForm({ type, accountId, categories, onCreated }: Tran
       setDescription("");
       setNewCategoryName("");
       setOccurredOn(today());
+      setPaymentMethod("account");
       setStatus("success");
       window.setTimeout(() => setStatus("idle"), 2500);
       onCreated();
@@ -195,6 +205,20 @@ export function TransactionForm({ type, accountId, categories, onCreated }: Tran
             placeholder={copy.newCategoryPlaceholder}
             className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
           />
+        </label>
+      )}
+
+      {type === "expense" && hasCreditLine && (
+        <label className="flex flex-col gap-1 text-sm">
+          Forma de pagamento
+          <select
+            value={paymentMethod}
+            onChange={(event) => setPaymentMethod(event.target.value as "account" | "credit_line")}
+            className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+          >
+            <option value="account">Conta</option>
+            <option value="credit_line">Cartão de crédito</option>
+          </select>
         </label>
       )}
 

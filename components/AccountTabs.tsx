@@ -1,14 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { BANK_THEME } from "@/components/bankTheme";
+import {
+  BANK_LABELS,
+  contrastTextColor,
+  defaultColorForBank,
+  getAccountTheme,
+} from "@/components/bankTheme";
 import type { Account, Bank } from "@/lib/accounts";
 
 export interface AccountFormInput {
   name: string;
   bank: Bank;
+  bankColor: string;
   hasCreditLine: boolean;
   creditLimit: number | null;
+  creditLineDueDay: number | null;
 }
 
 interface AccountTabsProps {
@@ -49,19 +56,20 @@ export function AccountTabs({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         {accounts.map((account) => {
-          const theme = BANK_THEME[account.bank];
+          const theme = getAccountTheme(account);
           const isActive = scope === String(account.id);
+          const activeTextColor = contrastTextColor(theme.color);
           return (
             <div key={account.id} className="flex items-center gap-0.5">
               <button
                 type="button"
                 onClick={() => onSelect(String(account.id))}
                 className={`${TAB_BASE} ${isActive ? "" : TAB_INACTIVE}`}
-                style={isActive ? { backgroundColor: theme.color, color: theme.onColor } : undefined}
+                style={isActive ? { backgroundColor: theme.color, color: activeTextColor } : undefined}
               >
                 <span
                   className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle"
-                  style={{ backgroundColor: isActive ? theme.onColor : theme.color }}
+                  style={{ backgroundColor: isActive ? activeTextColor : theme.color }}
                 />
                 {account.name}
                 {account.has_credit_line && (
@@ -143,13 +151,24 @@ function AccountForm({
   onSubmit: (input: AccountFormInput) => Promise<void>;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
-  const [bank, setBank] = useState<Bank>(initial?.bank ?? "other");
+  const [bank, setBank] = useState<Bank>(initial?.bank ?? "custom");
+  const [bankColor, setBankColor] = useState(
+    initial?.bank_color ?? defaultColorForBank(initial?.bank ?? "custom")
+  );
   const [hasCreditLine, setHasCreditLine] = useState(initial?.has_credit_line ?? false);
   const [creditLimit, setCreditLimit] = useState(
     initial?.credit_limit ? String(initial.credit_limit) : ""
   );
+  const [creditLineDueDay, setCreditLineDueDay] = useState(
+    initial?.credit_line_due_day ? String(initial.credit_line_due_day) : ""
+  );
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+
+  function handleBankChange(nextBank: Bank) {
+    setBank(nextBank);
+    setBankColor(defaultColorForBank(nextBank));
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -160,8 +179,10 @@ function AccountForm({
       await onSubmit({
         name,
         bank,
+        bankColor,
         hasCreditLine,
         creditLimit: hasCreditLine ? Number(creditLimit) : null,
+        creditLineDueDay: hasCreditLine && creditLineDueDay ? Number(creditLineDueDay) : null,
       });
     } catch (error) {
       setStatus("error");
@@ -190,15 +211,28 @@ function AccountForm({
         Banco
         <select
           value={bank}
-          onChange={(event) => setBank(event.target.value as Bank)}
+          onChange={(event) => handleBankChange(event.target.value as Bank)}
           className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
         >
-          {(Object.keys(BANK_THEME) as Bank[]).map((key) => (
-            <option key={key} value={key}>
-              {BANK_THEME[key].label}
-            </option>
-          ))}
+          {(Object.keys(BANK_LABELS) as Bank[])
+            .filter((key) => key !== "custom")
+            .map((key) => (
+              <option key={key} value={key}>
+                {BANK_LABELS[key]}
+              </option>
+            ))}
+          <option value="custom">+ Criar outro banco</option>
         </select>
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        Cor do tema
+        <input
+          type="color"
+          value={bankColor}
+          onChange={(event) => setBankColor(event.target.value)}
+          className="h-10 w-14 cursor-pointer rounded-md border border-zinc-300 dark:border-zinc-700"
+        />
       </label>
 
       <label className="flex items-center gap-2 pb-2 text-sm">
@@ -212,19 +246,35 @@ function AccountForm({
       </label>
 
       {hasCreditLine && (
-        <label className="flex flex-col gap-1 text-sm">
-          Limite
-          <input
-            type="number"
-            step="0.01"
-            min="0.01"
-            required
-            value={creditLimit}
-            onChange={(event) => setCreditLimit(event.target.value)}
-            placeholder="0,00"
-            className="w-32 min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
-          />
-        </label>
+        <>
+          <label className="flex flex-col gap-1 text-sm">
+            Limite
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              required
+              value={creditLimit}
+              onChange={(event) => setCreditLimit(event.target.value)}
+              placeholder="0,00"
+              className="w-32 min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+            />
+          </label>
+
+          <label className="flex flex-col gap-1 text-sm">
+            Dia do vencimento
+            <input
+              type="number"
+              step="1"
+              min="1"
+              max="31"
+              value={creditLineDueDay}
+              onChange={(event) => setCreditLineDueDay(event.target.value)}
+              placeholder="Ex.: 10"
+              className="w-28 min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+            />
+          </label>
+        </>
       )}
 
       <button

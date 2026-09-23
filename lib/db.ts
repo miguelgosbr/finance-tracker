@@ -101,18 +101,19 @@ async function runMigrations(db: Queryable) {
     END $$;
   `);
 
-  // Accounts gained bank/credit-line fields, replacing the old
-  // checking/credit "kind" split (a credit line is now a property of an
-  // account, not a separate account). Detect the old shape by the absence
-  // of accounts.bank and drop the account-scoped tables so they recreate
-  // with the new columns.
+  // Accounts gained bank/credit-line fields (replacing the old
+  // checking/credit "kind" split — a credit line is now a property of an
+  // account) and later a customizable theme color, a credit line due day,
+  // and transactions gained a payment_method. Detect the old shape by the
+  // absence of accounts.credit_line_due_day (the newest column) and drop
+  // the account-scoped tables so they recreate with the current columns.
   await db.query(`
     DO $$ BEGIN
       IF EXISTS (
         SELECT 1 FROM information_schema.tables WHERE table_name = 'accounts'
       ) AND NOT EXISTS (
         SELECT 1 FROM information_schema.columns
-        WHERE table_name = 'accounts' AND column_name = 'bank'
+        WHERE table_name = 'accounts' AND column_name = 'credit_line_due_day'
       ) THEN
         DROP TABLE IF EXISTS cofrinho_movements, cofrinhos, transactions, accounts CASCADE;
       END IF;
@@ -142,10 +143,12 @@ async function runMigrations(db: Queryable) {
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
-      bank TEXT NOT NULL DEFAULT 'other'
-        CHECK (bank IN ('nubank', 'banco_do_brasil', 'mercado_pago', 'caixa', 'other')),
+      bank TEXT NOT NULL DEFAULT 'custom'
+        CHECK (bank IN ('nubank', 'banco_do_brasil', 'mercado_pago', 'caixa', 'custom')),
+      bank_color TEXT NOT NULL DEFAULT '#71717a',
       has_credit_line BOOLEAN NOT NULL DEFAULT false,
       credit_limit DOUBLE PRECISION,
+      credit_line_due_day INTEGER CHECK (credit_line_due_day BETWEEN 1 AND 31),
       created_at TEXT NOT NULL DEFAULT (now())::text
     );
   `);
@@ -174,6 +177,7 @@ async function runMigrations(db: Queryable) {
       description TEXT NOT NULL,
       category_id INTEGER NOT NULL REFERENCES categories(id),
       occurred_on TEXT NOT NULL,
+      payment_method TEXT NOT NULL DEFAULT 'account' CHECK (payment_method IN ('account', 'credit_line')),
       created_at TEXT NOT NULL DEFAULT (now())::text
     );
   `);

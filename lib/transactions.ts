@@ -1,6 +1,7 @@
 import { getDb } from "./db";
 
 export type TransactionType = "income" | "expense";
+export type PaymentMethod = "account" | "credit_line";
 
 export interface Transaction {
   id: number;
@@ -10,6 +11,7 @@ export interface Transaction {
   description: string;
   category_id: number;
   occurred_on: string;
+  payment_method: PaymentMethod;
   created_at: string;
 }
 
@@ -24,6 +26,16 @@ export interface NewTransaction {
   description: string;
   category_id: number;
   occurred_on: string;
+  paymentMethod?: PaymentMethod;
+}
+
+export interface TransactionEdit {
+  type: TransactionType;
+  amount: number;
+  description: string;
+  category_id: number;
+  occurred_on: string;
+  paymentMethod: PaymentMethod;
 }
 
 /**
@@ -64,8 +76,8 @@ export async function listTransactionsForUser(
 export async function createTransaction(input: NewTransaction): Promise<Transaction> {
   const db = await getDb();
   const result = await db.query<Transaction>(
-    `INSERT INTO transactions (account_id, type, amount, description, category_id, occurred_on)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO transactions (account_id, type, amount, description, category_id, occurred_on, payment_method)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
     [
       input.account_id,
@@ -74,9 +86,62 @@ export async function createTransaction(input: NewTransaction): Promise<Transact
       input.description,
       input.category_id,
       input.occurred_on,
+      input.paymentMethod ?? "account",
     ]
   );
   return result.rows[0];
+}
+
+/** Returns the transaction only if it belongs to an account owned by the user. */
+export async function getOwnedTransaction(
+  userId: number,
+  transactionId: number
+): Promise<Transaction | null> {
+  const db = await getDb();
+  const result = await db.query<Transaction>(
+    `SELECT transactions.*
+     FROM transactions
+     JOIN accounts ON accounts.id = transactions.account_id
+     WHERE transactions.id = $1 AND accounts.user_id = $2`,
+    [transactionId, userId]
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function updateTransaction(
+  userId: number,
+  transactionId: number,
+  edit: TransactionEdit
+): Promise<Transaction | null> {
+  const owned = await getOwnedTransaction(userId, transactionId);
+  if (!owned) return null;
+
+  const db = await getDb();
+  const result = await db.query<Transaction>(
+    `UPDATE transactions
+     SET type = $2, amount = $3, description = $4, category_id = $5, occurred_on = $6, payment_method = $7
+     WHERE id = $1
+     RETURNING *`,
+    [
+      transactionId,
+      edit.type,
+      edit.amount,
+      edit.description,
+      edit.category_id,
+      edit.occurred_on,
+      edit.paymentMethod,
+    ]
+  );
+  return result.rows[0];
+}
+
+export async function deleteTransaction(userId: number, transactionId: number): Promise<boolean> {
+  const owned = await getOwnedTransaction(userId, transactionId);
+  if (!owned) return false;
+
+  const db = await getDb();
+  await db.query("DELETE FROM transactions WHERE id = $1", [transactionId]);
+  return true;
 }
 
 export async function getBalanceForAccounts(accountIds: number[]): Promise<number> {
@@ -85,9 +150,18 @@ export async function getBalanceForAccounts(accountIds: number[]): Promise<numbe
   const db = await getDb();
   const placeholders = accountIds.map((_, index) => `$${index + 1}`).join(", ");
 
+  // Expenses paid via a credit line don't leave the account's cash on hand
+  // immediately — they accrue on the invoice instead, so they're excluded
+  // from the cash balance (see getCreditLineUsage for that tally).
   const transactionsResult = await db.query<{ net: number }>(
     `SELECT
-       COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE -amount END), 0) AS net
+       COALESCE(SUM(
+         CASE
+           WHEN type = 'income' THEN amount
+           WHEN type = 'expense' AND payment_method = 'account' THEN -amount
+           ELSE 0
+         END
+       ), 0) AS net
      FROM transactions
      WHERE account_id IN (${placeholders})`,
     accountIds
@@ -112,4 +186,27 @@ export async function getCurrentBalanceForUser(userId: number): Promise<number> 
     [userId]
   );
   return getBalanceForAccounts(accountIdsResult.rows.map((row) => row.id));
+}
+
+/** Total spent via the credit line within the given reference month — the "current invoice". */
+export async function getCreditLineUsage(
+  accountId: number,
+  referenceDate: Date = new Date()
+): Promise<number> {
+  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)
+    .toISOString()
+    .slice(0, 10);
+  const monthEnd = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0)
+    .toISOString()
+    .slice(0, 10);
+
+  const db = await getDb();
+  const result = await db.query<{ total: number }>(
+    `SELECT COALESCE(SUM(amount), 0) AS total
+     FROM transactions
+     WHERE account_id = $1 AND type = 'expense' AND payment_method = 'credit_line'
+       AND occurred_on BETWEEN $2 AND $3`,
+    [accountId, monthStart, monthEnd]
+  );
+  return Number(result.rows[0].total);
 }

@@ -5,6 +5,7 @@ import { getBurnRateDiagnosis } from "@/lib/analytics";
 import { getCurrentUser } from "@/lib/auth";
 import { listCategories } from "@/lib/categories";
 import { accrueYieldsForAccount, listCofrinhosForUser } from "@/lib/cofrinhos";
+import { getCreditLineStatus } from "@/lib/creditLine";
 import { getTimeSeries } from "@/lib/reports";
 import { getSetting } from "@/lib/settings";
 import { getCurrentBalance, listTransactionsForUser } from "@/lib/transactions";
@@ -17,6 +18,7 @@ export default async function Home() {
 
   const accounts = await listAccounts(user.id);
   const selectedAccountId = accounts[0]?.id ?? null;
+  const selectedAccount = accounts[0] ?? null;
 
   if (selectedAccountId !== null) {
     await accrueYieldsForAccount(selectedAccountId);
@@ -31,6 +33,7 @@ export default async function Home() {
     cofrinhos,
     monthlyBudget,
     cdiRateAnnual,
+    creditLine,
   ] = await Promise.all([
     listCategories(user.id),
     selectedAccountId !== null
@@ -44,6 +47,7 @@ export default async function Home() {
       : Promise.resolve([]),
     getSetting(user.id, "monthly_budget"),
     getSetting(user.id, "cdi_rate_annual"),
+    selectedAccount ? getCreditLineStatus(selectedAccount) : Promise.resolve(null),
   ]);
 
   return (
@@ -62,6 +66,7 @@ export default async function Home() {
         monthly_budget: monthlyBudget ?? "",
         cdi_rate_annual: cdiRateAnnual ?? "",
       }}
+      initialCreditLine={creditLine}
     />
   );
 }

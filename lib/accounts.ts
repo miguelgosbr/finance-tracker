@@ -1,13 +1,13 @@
 import { getDb } from "./db";
 
-export type Bank = "nubank" | "banco_do_brasil" | "mercado_pago" | "caixa" | "other";
+export type Bank = "nubank" | "banco_do_brasil" | "mercado_pago" | "caixa" | "custom";
 
 export const VALID_BANKS: Bank[] = [
   "nubank",
   "banco_do_brasil",
   "mercado_pago",
   "caixa",
-  "other",
+  "custom",
 ];
 
 export interface Account {
@@ -15,16 +15,20 @@ export interface Account {
   user_id: number;
   name: string;
   bank: Bank;
+  bank_color: string;
   has_credit_line: boolean;
   credit_limit: number | null;
+  credit_line_due_day: number | null;
   created_at: string;
 }
 
 export interface NewAccountInput {
   name: string;
   bank: Bank;
+  bankColor: string;
   hasCreditLine: boolean;
   creditLimit: number | null;
+  creditLineDueDay: number | null;
 }
 
 export async function listAccounts(userId: number): Promise<Account[]> {
@@ -39,10 +43,18 @@ export async function listAccounts(userId: number): Promise<Account[]> {
 export async function createAccount(userId: number, input: NewAccountInput): Promise<Account> {
   const db = await getDb();
   const result = await db.query<Account>(
-    `INSERT INTO accounts (user_id, name, bank, has_credit_line, credit_limit)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO accounts (user_id, name, bank, bank_color, has_credit_line, credit_limit, credit_line_due_day)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [userId, input.name.trim(), input.bank, input.hasCreditLine, input.creditLimit]
+    [
+      userId,
+      input.name.trim(),
+      input.bank,
+      input.bankColor,
+      input.hasCreditLine,
+      input.creditLimit,
+      input.creditLineDueDay,
+    ]
   );
   return result.rows[0];
 }
@@ -55,10 +67,20 @@ export async function updateAccount(
   const db = await getDb();
   const result = await db.query<Account>(
     `UPDATE accounts
-     SET name = $3, bank = $4, has_credit_line = $5, credit_limit = $6
+     SET name = $3, bank = $4, bank_color = $5, has_credit_line = $6,
+         credit_limit = $7, credit_line_due_day = $8
      WHERE id = $1 AND user_id = $2
      RETURNING *`,
-    [accountId, userId, input.name.trim(), input.bank, input.hasCreditLine, input.creditLimit]
+    [
+      accountId,
+      userId,
+      input.name.trim(),
+      input.bank,
+      input.bankColor,
+      input.hasCreditLine,
+      input.creditLimit,
+      input.creditLineDueDay,
+    ]
   );
   return result.rows[0] ?? null;
 }
