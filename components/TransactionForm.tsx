@@ -128,7 +128,7 @@ export function TransactionForm({ type, categories, onCreated }: TransactionForm
       <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{copy.title}</h2>
 
       <div className="flex gap-3">
-        <label className="flex flex-1 flex-col gap-1 text-sm">
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
           Valor
           <input
             type="number"
@@ -138,18 +138,18 @@ export function TransactionForm({ type, categories, onCreated }: TransactionForm
             value={amount}
             onChange={(event) => setAmount(event.target.value)}
             placeholder="0,00"
-            className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
           />
         </label>
 
-        <label className="flex flex-1 flex-col gap-1 text-sm">
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
           Data
           <input
             type="date"
             required
             value={occurredOn}
             onChange={(event) => setOccurredOn(event.target.value)}
-            className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
           />
         </label>
       </div>
@@ -162,7 +162,7 @@ export function TransactionForm({ type, categories, onCreated }: TransactionForm
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           placeholder={copy.descriptionPlaceholder}
-          className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+          className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
         />
       </label>
 
@@ -171,7 +171,7 @@ export function TransactionForm({ type, categories, onCreated }: TransactionForm
         <select
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
-          className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+          className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
         >
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
@@ -191,7 +191,7 @@ export function TransactionForm({ type, categories, onCreated }: TransactionForm
             value={newCategoryName}
             onChange={(event) => setNewCategoryName(event.target.value)}
             placeholder={copy.newCategoryPlaceholder}
-            className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+            className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
           />
         </label>
       )}
