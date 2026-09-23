@@ -43,7 +43,7 @@ export async function signUp(email: string, password: string): Promise<SessionUs
   );
   const user = userResult.rows[0];
 
-  await db.query("INSERT INTO accounts (user_id, name, kind) VALUES ($1, $2, 'checking')", [
+  await db.query("INSERT INTO accounts (user_id, name) VALUES ($1, $2)", [
     user.id,
     DEFAULT_ACCOUNT_NAME,
   ]);

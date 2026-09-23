@@ -20,7 +20,7 @@ export async function createTestUserAndAccount(): Promise<TestFixture> {
   const userId = userResult.rows[0].id;
 
   const accountResult = await db.query<{ id: number }>(
-    "INSERT INTO accounts (user_id, name, kind) VALUES ($1, 'Conta teste', 'checking') RETURNING id",
+    "INSERT INTO accounts (user_id, name) VALUES ($1, 'Conta teste') RETURNING id",
     [userId]
   );
   const accountId = accountResult.rows[0].id;

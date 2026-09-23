@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AccountTabs } from "@/components/AccountTabs";
+import { AccountTabs, type AccountFormInput } from "@/components/AccountTabs";
+import { BANK_THEME, hexToRgba } from "@/components/bankTheme";
 import { BurnRateCard } from "@/components/BurnRateCard";
 import { CofrinhosSection } from "@/components/CofrinhosSection";
 import { ReportsChart } from "@/components/ReportsChart";
 import { SettingsSection, type Settings } from "@/components/SettingsSection";
 import { TransactionForm } from "@/components/TransactionForm";
-import type { Account, AccountKind } from "@/lib/accounts";
+import type { Account } from "@/lib/accounts";
 import type { BurnRateDiagnosis } from "@/lib/analytics";
 import type { Category } from "@/lib/categories";
 import type { CofrinhoWithAccount } from "@/lib/cofrinhos";
@@ -63,6 +64,8 @@ export function Dashboard({
 
   const isAll = scope === "all";
   const currentAccountId = isAll ? null : Number(scope);
+  const currentAccount = accounts.find((account) => account.id === currentAccountId) ?? null;
+  const theme = currentAccount ? BANK_THEME[currentAccount.bank] : null;
 
   async function loadScopeData(targetScope: string, period: ReportPeriod) {
     setIsRefreshing(true);
@@ -111,11 +114,20 @@ export function Dashboard({
     await loadScopeData(scope, reportPeriod);
   }
 
-  async function handleCreateAccount(name: string, kind: AccountKind) {
+  function toAccountBody(input: AccountFormInput) {
+    return {
+      name: input.name,
+      bank: input.bank,
+      has_credit_line: input.hasCreditLine,
+      credit_limit: input.creditLimit,
+    };
+  }
+
+  async function handleCreateAccount(input: AccountFormInput) {
     const response = await fetch("/api/accounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, kind }),
+      body: JSON.stringify(toAccountBody(input)),
     });
 
     const data = await response.json();
@@ -128,6 +140,43 @@ export function Dashboard({
     await loadScopeData(String(data.id), reportPeriod);
   }
 
+  async function handleUpdateAccount(accountId: number, input: AccountFormInput) {
+    const response = await fetch(`/api/accounts/${accountId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(toAccountBody(input)),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error ?? "Não foi possível salvar a conta.");
+    }
+
+    setAccounts((previous) =>
+      previous.map((account) => (account.id === accountId ? data : account))
+    );
+  }
+
+  async function handleDeleteAccount(accountId: number) {
+    const response = await fetch(`/api/accounts/${accountId}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error ?? "Não foi possível excluir a conta.");
+    }
+
+    const remaining = accounts.filter((account) => account.id !== accountId);
+    setAccounts(remaining);
+
+    const nextScope = String(currentAccountId) === String(accountId)
+      ? remaining[0]
+        ? String(remaining[0].id)
+        : "all"
+      : scope;
+
+    setScope(nextScope);
+    await loadScopeData(nextScope, reportPeriod);
+  }
+
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
@@ -138,10 +187,24 @@ export function Dashboard({
   const incomeCategories = categories.filter((category) => category.kind !== "expense");
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-zinc-50 px-4 py-8 sm:py-12 dark:bg-black">
+    <div
+      className="flex min-h-screen flex-col items-center bg-zinc-50 px-4 py-8 transition-colors duration-300 sm:py-12 dark:bg-black"
+      style={
+        theme
+          ? {
+              backgroundImage: `linear-gradient(180deg, ${hexToRgba(theme.color, 0.16)}, transparent 420px)`,
+            }
+          : undefined
+      }
+    >
       <main className="flex w-full max-w-2xl flex-col gap-5 sm:gap-6">
         <header className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Finanças</h1>
+          <h1
+            className="text-lg font-semibold text-zinc-900 dark:text-zinc-50"
+            style={theme ? { color: theme.color } : undefined}
+          >
+            Finanças{currentAccount ? ` · ${currentAccount.name}` : ""}
+          </h1>
           <div className="flex items-center gap-3">
             {isRefreshing && (
               <span className="flex items-center gap-1.5 text-xs text-zinc-400">
@@ -165,15 +228,25 @@ export function Dashboard({
           scope={scope}
           onSelect={selectScope}
           onCreate={handleCreateAccount}
+          onUpdate={handleUpdateAccount}
+          onDelete={handleDeleteAccount}
         />
 
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div
+          className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+          style={theme ? { borderTopColor: theme.color, borderTopWidth: 4 } : undefined}
+        >
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
             {isAll ? "Saldo consolidado" : "Saldo atual"}
           </p>
           <p className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
             {currencyFormatter.format(balance)}
           </p>
+          {currentAccount?.has_credit_line && (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Linha de crédito: limite de {currencyFormatter.format(currentAccount.credit_limit ?? 0)}
+            </p>
+          )}
         </div>
 
         <BurnRateCard diagnosis={burnRate} />

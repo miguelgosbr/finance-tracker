@@ -101,6 +101,24 @@ async function runMigrations(db: Queryable) {
     END $$;
   `);
 
+  // Accounts gained bank/credit-line fields, replacing the old
+  // checking/credit "kind" split (a credit line is now a property of an
+  // account, not a separate account). Detect the old shape by the absence
+  // of accounts.bank and drop the account-scoped tables so they recreate
+  // with the new columns.
+  await db.query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'accounts'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'accounts' AND column_name = 'bank'
+      ) THEN
+        DROP TABLE IF EXISTS cofrinho_movements, cofrinhos, transactions, accounts CASCADE;
+      END IF;
+    END $$;
+  `);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -124,7 +142,10 @@ async function runMigrations(db: Queryable) {
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
-      kind TEXT NOT NULL DEFAULT 'checking' CHECK (kind IN ('checking', 'credit')),
+      bank TEXT NOT NULL DEFAULT 'other'
+        CHECK (bank IN ('nubank', 'banco_do_brasil', 'mercado_pago', 'caixa', 'other')),
+      has_credit_line BOOLEAN NOT NULL DEFAULT false,
+      credit_limit DOUBLE PRECISION,
       created_at TEXT NOT NULL DEFAULT (now())::text
     );
   `);

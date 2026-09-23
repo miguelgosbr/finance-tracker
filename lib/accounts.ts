@@ -1,13 +1,30 @@
 import { getDb } from "./db";
 
-export type AccountKind = "checking" | "credit";
+export type Bank = "nubank" | "banco_do_brasil" | "mercado_pago" | "caixa" | "other";
+
+export const VALID_BANKS: Bank[] = [
+  "nubank",
+  "banco_do_brasil",
+  "mercado_pago",
+  "caixa",
+  "other",
+];
 
 export interface Account {
   id: number;
   user_id: number;
   name: string;
-  kind: AccountKind;
+  bank: Bank;
+  has_credit_line: boolean;
+  credit_limit: number | null;
   created_at: string;
+}
+
+export interface NewAccountInput {
+  name: string;
+  bank: Bank;
+  hasCreditLine: boolean;
+  creditLimit: number | null;
 }
 
 export async function listAccounts(userId: number): Promise<Account[]> {
@@ -19,17 +36,31 @@ export async function listAccounts(userId: number): Promise<Account[]> {
   return result.rows;
 }
 
-export async function createAccount(
-  userId: number,
-  name: string,
-  kind: AccountKind
-): Promise<Account> {
+export async function createAccount(userId: number, input: NewAccountInput): Promise<Account> {
   const db = await getDb();
   const result = await db.query<Account>(
-    "INSERT INTO accounts (user_id, name, kind) VALUES ($1, $2, $3) RETURNING *",
-    [userId, name.trim(), kind]
+    `INSERT INTO accounts (user_id, name, bank, has_credit_line, credit_limit)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [userId, input.name.trim(), input.bank, input.hasCreditLine, input.creditLimit]
   );
   return result.rows[0];
+}
+
+export async function updateAccount(
+  userId: number,
+  accountId: number,
+  input: NewAccountInput
+): Promise<Account | null> {
+  const db = await getDb();
+  const result = await db.query<Account>(
+    `UPDATE accounts
+     SET name = $3, bank = $4, has_credit_line = $5, credit_limit = $6
+     WHERE id = $1 AND user_id = $2
+     RETURNING *`,
+    [accountId, userId, input.name.trim(), input.bank, input.hasCreditLine, input.creditLimit]
+  );
+  return result.rows[0] ?? null;
 }
 
 /** Returns the account only if it belongs to the given user — use for authorization checks. */
@@ -40,6 +71,16 @@ export async function getOwnedAccount(userId: number, accountId: number): Promis
     [accountId, userId]
   );
   return result.rows[0] ?? null;
+}
+
+/** Returns true if an account belonging to the user was deleted. */
+export async function deleteAccount(userId: number, accountId: number): Promise<boolean> {
+  const owned = await getOwnedAccount(userId, accountId);
+  if (!owned) return false;
+
+  const db = await getDb();
+  await db.query("DELETE FROM accounts WHERE id = $1 AND user_id = $2", [accountId, userId]);
+  return true;
 }
 
 /** All account ids owned by the user — the "all accounts" consolidated scope. */
