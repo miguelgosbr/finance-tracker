@@ -1,6 +1,6 @@
 # 💰 Finanças — Gerenciador Financeiro Pessoal Inteligente
 
-**🔗 Aplicação online: [finance-tracker-chi-five-21.vercel.app](https://finance-tracker-chi-five-21.vercel.app)**
+**🔗 Aplicação online: [finance-tracker-mc.vercel.app](https://finance-tracker-mc.vercel.app)**
 
 Gerenciador financeiro pessoal focado em **alta praticidade no uso diário**, com uma interface
 intuitiva e sem depender de integrações com plataformas de terceiros. O objetivo é **eliminar a
@@ -63,7 +63,7 @@ análises automáticas.
 
 ## 🖼️ Capturas de tela
 
-A forma mais rápida de conhecer a interface é acessar a **[demo ao vivo](https://finance-tracker-chi-five-21.vercel.app)**.
+A forma mais rápida de conhecer a interface é acessar a **[demo ao vivo](https://finance-tracker-mc.vercel.app)**.
 
 > _Para incluir imagens no repositório, adicione os arquivos em `docs/` e referencie-os aqui, por
 > exemplo: `![Dashboard](docs/dashboard.png)`._
