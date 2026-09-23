@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { BurnRateCard } from "@/components/BurnRateCard";
 import { TransactionForm } from "@/components/TransactionForm";
+import type { BurnRateDiagnosis } from "@/lib/analytics";
 import type { Category } from "@/lib/categories";
 import type { Transaction } from "@/lib/transactions";
 
@@ -14,26 +16,31 @@ interface DashboardProps {
   initialCategories: Category[];
   initialTransactions: Transaction[];
   initialBalance: number;
+  initialBurnRate: BurnRateDiagnosis;
 }
 
 export function Dashboard({
   initialCategories,
   initialTransactions,
   initialBalance,
+  initialBurnRate,
 }: DashboardProps) {
   const [categories, setCategories] = useState(initialCategories);
   const [transactions, setTransactions] = useState(initialTransactions);
   const [balance, setBalance] = useState(initialBalance);
+  const [burnRate, setBurnRate] = useState(initialBurnRate);
 
   async function refresh() {
-    const [categoriesResponse, transactionsResponse] = await Promise.all([
+    const [categoriesResponse, transactionsResponse, burnRateResponse] = await Promise.all([
       fetch("/api/categories"),
       fetch("/api/transactions"),
+      fetch("/api/analytics/burn-rate"),
     ]);
     setCategories(await categoriesResponse.json());
     const transactionsData = await transactionsResponse.json();
     setTransactions(transactionsData.transactions);
     setBalance(transactionsData.balance);
+    setBurnRate(await burnRateResponse.json());
   }
 
   const expenseCategories = categories.filter((category) => category.kind !== "income");
@@ -48,6 +55,8 @@ export function Dashboard({
             {currencyFormatter.format(balance)}
           </p>
         </div>
+
+        <BurnRateCard diagnosis={burnRate} />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TransactionForm type="expense" categories={expenseCategories} onCreated={refresh} />
