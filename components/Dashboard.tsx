@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { BurnRateCard } from "@/components/BurnRateCard";
+import { ReportsChart } from "@/components/ReportsChart";
 import { TransactionForm } from "@/components/TransactionForm";
 import type { BurnRateDiagnosis } from "@/lib/analytics";
 import type { Category } from "@/lib/categories";
+import type { ReportPeriod, ReportPoint } from "@/lib/reports";
 import type { Transaction } from "@/lib/transactions";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
@@ -17,6 +19,8 @@ interface DashboardProps {
   initialTransactions: Transaction[];
   initialBalance: number;
   initialBurnRate: BurnRateDiagnosis;
+  initialReportPeriod: ReportPeriod;
+  initialReportData: ReportPoint[];
 }
 
 export function Dashboard({
@@ -24,17 +28,39 @@ export function Dashboard({
   initialTransactions,
   initialBalance,
   initialBurnRate,
+  initialReportPeriod,
+  initialReportData,
 }: DashboardProps) {
   const [categories, setCategories] = useState(initialCategories);
   const [transactions, setTransactions] = useState(initialTransactions);
   const [balance, setBalance] = useState(initialBalance);
   const [burnRate, setBurnRate] = useState(initialBurnRate);
+  const [reportPeriod, setReportPeriod] = useState(initialReportPeriod);
+  const [reportData, setReportData] = useState(initialReportData);
+  const [isReportLoading, setIsReportLoading] = useState(false);
+
+  async function loadReports(period: ReportPeriod) {
+    setIsReportLoading(true);
+    try {
+      const response = await fetch(`/api/reports?period=${period}`);
+      setReportData(await response.json());
+    } finally {
+      setIsReportLoading(false);
+    }
+  }
+
+  async function selectReportPeriod(period: ReportPeriod) {
+    if (period === reportPeriod) return;
+    setReportPeriod(period);
+    await loadReports(period);
+  }
 
   async function refresh() {
     const [categoriesResponse, transactionsResponse, burnRateResponse] = await Promise.all([
       fetch("/api/categories"),
       fetch("/api/transactions"),
       fetch("/api/analytics/burn-rate"),
+      loadReports(reportPeriod),
     ]);
     setCategories(await categoriesResponse.json());
     const transactionsData = await transactionsResponse.json();
@@ -57,6 +83,13 @@ export function Dashboard({
         </div>
 
         <BurnRateCard diagnosis={burnRate} />
+
+        <ReportsChart
+          period={reportPeriod}
+          data={reportData}
+          isLoading={isReportLoading}
+          onPeriodChange={selectReportPeriod}
+        />
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <TransactionForm type="expense" categories={expenseCategories} onCreated={refresh} />
