@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createCategory, listCategories, type CategoryKind } from "@/lib/categories";
+import { getCurrentUser } from "@/lib/auth";
 
 const VALID_KINDS: CategoryKind[] = ["income", "expense", "both"];
 
 export async function GET() {
-  return NextResponse.json(await listCategories());
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+
+  return NextResponse.json(await listCategories(user.id));
 }
 
 export async function POST(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+
   const body = await request.json();
   const { name, kind } = body as { name?: unknown; kind?: unknown };
 
@@ -26,7 +33,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const category = await createCategory(name, kind as CategoryKind);
+    const category = await createCategory(user.id, name, kind as CategoryKind);
     return NextResponse.json(category, { status: 201 });
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "23505") {

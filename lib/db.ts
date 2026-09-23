@@ -8,7 +8,7 @@ export interface Queryable {
   query<T = Record<string, unknown>>(text: string, params?: unknown[]): Promise<QueryResult<T>>;
 }
 
-const DEFAULT_CATEGORIES: { name: string; kind: "income" | "expense" | "both" }[] = [
+export const DEFAULT_CATEGORIES: { name: string; kind: "income" | "expense" | "both" }[] = [
   { name: "Alimentação", kind: "expense" },
   { name: "Transporte", kind: "expense" },
   { name: "Moradia", kind: "expense" },
@@ -22,12 +22,23 @@ const DEFAULT_CATEGORIES: { name: string; kind: "income" | "expense" | "both" }[
   { name: "Rendimentos", kind: "income" },
 ];
 
-const DEFAULT_SETTINGS: Record<string, string> = {
+export const DEFAULT_SETTINGS: Record<string, string> = {
   monthly_budget: "",
   cdi_rate_annual: "10.5",
 };
 
-let dbPromise: Promise<Queryable> | null = null;
+export const DEFAULT_ACCOUNT_NAME = "Minha conta";
+
+// Turbopack compiles lib/db.ts into separate module instances per bundle
+// layer (route handlers vs. SSR), each of which would otherwise get its own
+// `dbPromise` — harmless with real Postgres (the data lives in the external
+// database either way) but fatal for the in-memory PGlite dev fallback,
+// where each copy would be its own empty database. Storing the singleton on
+// `globalThis` — the standard fix for this class of Next.js dev issue —
+// keeps every layer pointed at the same instance.
+const globalForDb = globalThis as typeof globalThis & {
+  __financeDbPromise?: Promise<Queryable>;
+};
 
 function getConnectionString(): string | undefined {
   return process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
@@ -71,18 +82,72 @@ async function createClient(): Promise<Queryable> {
 }
 
 async function runMigrations(db: Queryable) {
+  // The multi-account/auth schema is a breaking change from the earlier
+  // single-tenant one (categories/transactions/cofrinhos gained user_id /
+  // account_id columns, settings' primary key changed). Detect a pre-auth
+  // database by the absence of categories.user_id and drop the old tables so
+  // the CREATE TABLE statements below can recreate them with the new shape,
+  // instead of silently no-op'ing against incompatible tables.
+  await db.query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'categories'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'categories' AND column_name = 'user_id'
+      ) THEN
+        DROP TABLE IF EXISTS cofrinho_movements, cofrinhos, transactions, categories, settings CASCADE;
+      END IF;
+    END $$;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (now())::text
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (now())::text
+    );
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS accounts (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'checking' CHECK (kind IN ('checking', 'credit')),
+      created_at TEXT NOT NULL DEFAULT (now())::text
+    );
+  `);
+
+  await db.query(
+    `CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts(user_id);`
+  );
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS categories (
       id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
       kind TEXT NOT NULL CHECK (kind IN ('income', 'expense', 'both')),
-      created_at TEXT NOT NULL DEFAULT (now())::text
+      created_at TEXT NOT NULL DEFAULT (now())::text,
+      UNIQUE (user_id, name)
     );
   `);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS transactions (
       id SERIAL PRIMARY KEY,
+      account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       type TEXT NOT NULL CHECK (type IN ('income', 'expense')),
       amount DOUBLE PRECISION NOT NULL CHECK (amount > 0),
       description TEXT NOT NULL,
@@ -93,6 +158,9 @@ async function runMigrations(db: Queryable) {
   `);
 
   await db.query(
+    `CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);`
+  );
+  await db.query(
     `CREATE INDEX IF NOT EXISTS idx_transactions_occurred_on ON transactions(occurred_on);`
   );
   await db.query(`CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);`);
@@ -100,6 +168,7 @@ async function runMigrations(db: Queryable) {
   await db.query(`
     CREATE TABLE IF NOT EXISTS cofrinhos (
       id SERIAL PRIMARY KEY,
+      account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       goal_amount DOUBLE PRECISION,
       cdi_percentage DOUBLE PRECISION NOT NULL DEFAULT 100,
@@ -108,6 +177,10 @@ async function runMigrations(db: Queryable) {
       created_at TEXT NOT NULL DEFAULT (now())::text
     );
   `);
+
+  await db.query(
+    `CREATE INDEX IF NOT EXISTS idx_cofrinhos_account_id ON cofrinhos(account_id);`
+  );
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS cofrinho_movements (
@@ -126,44 +199,26 @@ async function runMigrations(db: Queryable) {
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      PRIMARY KEY (user_id, key)
     );
   `);
-
-  const categoryCount = await db.query<{ count: string }>(
-    "SELECT COUNT(*)::int AS count FROM categories"
-  );
-
-  if (Number(categoryCount.rows[0].count) === 0) {
-    for (const category of DEFAULT_CATEGORIES) {
-      await db.query("INSERT INTO categories (name, kind) VALUES ($1, $2)", [
-        category.name,
-        category.kind,
-      ]);
-    }
-  }
-
-  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
-    await db.query(
-      "INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING",
-      [key, value]
-    );
-  }
 }
 
 export async function getDb(): Promise<Queryable> {
-  if (dbPromise) return dbPromise;
+  if (globalForDb.__financeDbPromise) return globalForDb.__financeDbPromise;
 
-  dbPromise = (async () => {
+  globalForDb.__financeDbPromise = (async () => {
     const db = await createClient();
     await runMigrations(db);
     return db;
   })();
 
-  return dbPromise;
+  return globalForDb.__financeDbPromise;
 }
 
 export function closeDb(): void {
-  dbPromise = null;
+  globalForDb.__financeDbPromise = undefined;
 }

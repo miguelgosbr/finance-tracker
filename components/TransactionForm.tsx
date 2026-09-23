@@ -47,11 +47,12 @@ const COPY: Record<
 
 interface TransactionFormProps {
   type: TransactionType;
+  accountId: number;
   categories: Category[];
   onCreated: () => void;
 }
 
-export function TransactionForm({ type, categories, onCreated }: TransactionFormProps) {
+export function TransactionForm({ type, accountId, categories, onCreated }: TransactionFormProps) {
   const copy = COPY[type];
 
   const [amount, setAmount] = useState("");
@@ -97,6 +98,7 @@ export function TransactionForm({ type, categories, onCreated }: TransactionForm
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          account_id: accountId,
           type,
           amount: Number(amount),
           description,

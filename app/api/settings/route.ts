@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { getSetting, setSetting } from "@/lib/settings";
 
-export interface SettingsPayload {
-  monthly_budget: string;
-  cdi_rate_annual: string;
-}
-
 export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+
   const [monthlyBudget, cdiRateAnnual] = await Promise.all([
-    getSetting("monthly_budget"),
-    getSetting("cdi_rate_annual"),
+    getSetting(user.id, "monthly_budget"),
+    getSetting(user.id, "cdi_rate_annual"),
   ]);
 
   return NextResponse.json({
@@ -19,6 +18,9 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+
   const body = await request.json();
   const { monthly_budget, cdi_rate_annual } = body as {
     monthly_budget?: unknown;
@@ -46,8 +48,8 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  await setSetting("monthly_budget", budgetValue);
-  await setSetting("cdi_rate_annual", String(cdiParsed));
+  await setSetting(user.id, "monthly_budget", budgetValue);
+  await setSetting(user.id, "cdi_rate_annual", String(cdiParsed));
 
   return NextResponse.json({
     monthly_budget: budgetValue,

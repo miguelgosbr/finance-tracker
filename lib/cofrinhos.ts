@@ -8,6 +8,7 @@ export type CofrinhoMovementType = "deposit" | "withdrawal" | "yield";
 
 export interface Cofrinho {
   id: number;
+  account_id: number;
   name: string;
   goal_amount: number | null;
   cdi_percentage: number;
@@ -29,28 +30,72 @@ export interface CofrinhoWithYield extends Cofrinho {
   monthlyYield: number;
 }
 
-export async function listCofrinhos(): Promise<CofrinhoWithYield[]> {
-  const db = await getDb();
-  const result = await db.query<Cofrinho>("SELECT * FROM cofrinhos ORDER BY name ASC");
+export interface CofrinhoWithAccount extends CofrinhoWithYield {
+  account_name: string;
+}
 
-  const cofrinhos: CofrinhoWithYield[] = [];
-  for (const cofrinho of result.rows) {
+/**
+ * Lists a user's cofrinhos across all of their accounts, joined with the
+ * account name. Pass `accountIds` to narrow to a subset — omit it for every
+ * account the user owns.
+ */
+export async function listCofrinhosForUser(
+  userId: number,
+  accountIds?: number[]
+): Promise<CofrinhoWithAccount[]> {
+  const db = await getDb();
+
+  const rows =
+    accountIds && accountIds.length > 0
+      ? (
+          await db.query<Cofrinho & { account_name: string }>(
+            `SELECT cofrinhos.*, accounts.name AS account_name
+             FROM cofrinhos
+             JOIN accounts ON accounts.id = cofrinhos.account_id
+             WHERE accounts.user_id = $1
+               AND cofrinhos.account_id IN (${accountIds
+                 .map((_, index) => `$${index + 2}`)
+                 .join(", ")})
+             ORDER BY accounts.name ASC, cofrinhos.name ASC`,
+            [userId, ...accountIds]
+          )
+        ).rows
+      : (
+          await db.query<Cofrinho & { account_name: string }>(
+            `SELECT cofrinhos.*, accounts.name AS account_name
+             FROM cofrinhos
+             JOIN accounts ON accounts.id = cofrinhos.account_id
+             WHERE accounts.user_id = $1
+             ORDER BY accounts.name ASC, cofrinhos.name ASC`,
+            [userId]
+          )
+        ).rows;
+
+  const cofrinhos: CofrinhoWithAccount[] = [];
+  for (const cofrinho of rows) {
     cofrinhos.push({ ...cofrinho, monthlyYield: await getMonthlyYield(cofrinho.id) });
   }
   return cofrinhos;
 }
 
 export async function createCofrinho(
+  accountId: number,
   name: string,
   cdiPercentage: number,
   goalAmount: number | null
 ): Promise<Cofrinho> {
   const db = await getDb();
   const result = await db.query<Cofrinho>(
-    "INSERT INTO cofrinhos (name, cdi_percentage, goal_amount) VALUES ($1, $2, $3) RETURNING *",
-    [name.trim(), cdiPercentage, goalAmount]
+    "INSERT INTO cofrinhos (account_id, name, cdi_percentage, goal_amount) VALUES ($1, $2, $3, $4) RETURNING *",
+    [accountId, name.trim(), cdiPercentage, goalAmount]
   );
   return result.rows[0];
+}
+
+export async function getCofrinho(cofrinhoId: number): Promise<Cofrinho | null> {
+  const db = await getDb();
+  const result = await db.query<Cofrinho>("SELECT * FROM cofrinhos WHERE id = $1", [cofrinhoId]);
+  return result.rows[0] ?? null;
 }
 
 export async function listMovements(cofrinhoId: number): Promise<CofrinhoMovement[]> {
@@ -108,6 +153,18 @@ function countBusinessDays(startExclusive: string, endInclusive: string): number
   return count;
 }
 
+async function getUserIdForCofrinho(cofrinhoId: number): Promise<number | null> {
+  const db = await getDb();
+  const result = await db.query<{ user_id: number }>(
+    `SELECT accounts.user_id
+     FROM cofrinhos
+     JOIN accounts ON accounts.id = cofrinhos.account_id
+     WHERE cofrinhos.id = $1`,
+    [cofrinhoId]
+  );
+  return result.rows[0]?.user_id ?? null;
+}
+
 export async function accrueCofrinhoYield(
   cofrinhoId: number,
   referenceDate: Date = new Date()
@@ -132,7 +189,8 @@ export async function accrueCofrinhoYield(
     return;
   }
 
-  const cdiRateSetting = await getSetting("cdi_rate_annual");
+  const userId = await getUserIdForCofrinho(cofrinhoId);
+  const cdiRateSetting = userId === null ? null : await getSetting(userId, "cdi_rate_annual");
   const effectiveAnnualRate =
     getAnnualCdiRate(cdiRateSetting === null ? null : Number(cdiRateSetting)) *
     (cofrinho.cdi_percentage / 100);
@@ -154,9 +212,32 @@ export async function accrueCofrinhoYield(
   }
 }
 
-export async function accrueAllYields(referenceDate: Date = new Date()): Promise<void> {
+export async function accrueYieldsForAccount(
+  accountId: number,
+  referenceDate: Date = new Date()
+): Promise<void> {
   const db = await getDb();
-  const result = await db.query<{ id: number }>("SELECT id FROM cofrinhos");
+  const result = await db.query<{ id: number }>(
+    "SELECT id FROM cofrinhos WHERE account_id = $1",
+    [accountId]
+  );
+  for (const { id } of result.rows) {
+    await accrueCofrinhoYield(id, referenceDate);
+  }
+}
+
+export async function accrueYieldsForUser(
+  userId: number,
+  referenceDate: Date = new Date()
+): Promise<void> {
+  const db = await getDb();
+  const result = await db.query<{ id: number }>(
+    `SELECT cofrinhos.id
+     FROM cofrinhos
+     JOIN accounts ON accounts.id = cofrinhos.account_id
+     WHERE accounts.user_id = $1`,
+    [userId]
+  );
   for (const { id } of result.rows) {
     await accrueCofrinhoYield(id, referenceDate);
   }

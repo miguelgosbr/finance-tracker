@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CofrinhoWithYield } from "@/lib/cofrinhos";
+import type { CofrinhoWithAccount } from "@/lib/cofrinhos";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -9,11 +9,20 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
 });
 
 interface CofrinhosSectionProps {
-  cofrinhos: CofrinhoWithYield[];
+  cofrinhos: CofrinhoWithAccount[];
+  accountId: number | null;
+  canManage: boolean;
+  showAccountNames: boolean;
   onChanged: () => void;
 }
 
-export function CofrinhosSection({ cofrinhos, onChanged }: CofrinhosSectionProps) {
+export function CofrinhosSection({
+  cofrinhos,
+  accountId,
+  canManage,
+  showAccountNames,
+  onChanged,
+}: CofrinhosSectionProps) {
   const [name, setName] = useState("");
   const [cdiPercentage, setCdiPercentage] = useState("100");
   const [goalAmount, setGoalAmount] = useState("");
@@ -22,6 +31,8 @@ export function CofrinhosSection({ cofrinhos, onChanged }: CofrinhosSectionProps
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
+    if (accountId === null) return;
+
     setCreateStatus("saving");
     setCreateError("");
 
@@ -30,6 +41,7 @@ export function CofrinhosSection({ cofrinhos, onChanged }: CofrinhosSectionProps
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          account_id: accountId,
           name,
           cdi_percentage: Number(cdiPercentage),
           goal_amount: goalAmount ? Number(goalAmount) : null,
@@ -58,77 +70,89 @@ export function CofrinhosSection({ cofrinhos, onChanged }: CofrinhosSectionProps
 
       <div className="flex flex-col gap-3">
         {cofrinhos.map((cofrinho) => (
-          <CofrinhoCard key={cofrinho.id} cofrinho={cofrinho} onChanged={onChanged} />
+          <CofrinhoCard
+            key={cofrinho.id}
+            cofrinho={cofrinho}
+            canManage={canManage}
+            showAccountName={showAccountNames}
+            onChanged={onChanged}
+          />
         ))}
         {cofrinhos.length === 0 && (
           <p className="text-sm text-zinc-400">Nenhum cofrinho criado ainda.</p>
         )}
       </div>
 
-      <form onSubmit={handleCreate} className="flex flex-col gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Novo cofrinho</h3>
+      {canManage && accountId !== null && (
+        <form onSubmit={handleCreate} className="flex flex-col gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+          <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Novo cofrinho</h3>
 
-        <div className="flex gap-3">
-          <label className="flex flex-1 flex-col gap-1 text-sm">
-            Nome
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Ex.: Reserva de emergência"
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
-            />
-          </label>
+          <div className="flex gap-3">
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+              Nome
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Ex.: Reserva de emergência"
+                className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
 
-          <label className="flex w-28 flex-col gap-1 text-sm">
-            % do CDI
+            <label className="flex w-28 flex-col gap-1 text-sm">
+              % do CDI
+              <input
+                type="number"
+                step="1"
+                min="1"
+                required
+                value={cdiPercentage}
+                onChange={(event) => setCdiPercentage(event.target.value)}
+                className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
+          </div>
+
+          <label className="flex flex-col gap-1 text-sm">
+            Meta (opcional)
             <input
               type="number"
-              step="1"
-              min="1"
-              required
-              value={cdiPercentage}
-              onChange={(event) => setCdiPercentage(event.target.value)}
-              className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+              step="0.01"
+              min="0.01"
+              value={goalAmount}
+              onChange={(event) => setGoalAmount(event.target.value)}
+              placeholder="0,00"
+              className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
             />
           </label>
-        </div>
 
-        <label className="flex flex-col gap-1 text-sm">
-          Meta (opcional)
-          <input
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={goalAmount}
-            onChange={(event) => setGoalAmount(event.target.value)}
-            placeholder="0,00"
-            className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
-          />
-        </label>
+          {createStatus === "error" && (
+            <p className="text-sm text-red-600 dark:text-red-400">{createError}</p>
+          )}
 
-        {createStatus === "error" && (
-          <p className="text-sm text-red-600 dark:text-red-400">{createError}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={createStatus === "saving"}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
-        >
-          {createStatus === "saving" ? "Salvando..." : "Criar cofrinho"}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={createStatus === "saving"}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+          >
+            {createStatus === "saving" ? "Salvando..." : "Criar cofrinho"}
+          </button>
+        </form>
+      )}
     </div>
   );
 }
 
 function CofrinhoCard({
   cofrinho,
+  canManage,
+  showAccountName,
   onChanged,
 }: {
-  cofrinho: CofrinhoWithYield;
+  cofrinho: CofrinhoWithAccount;
+  canManage: boolean;
+  showAccountName: boolean;
   onChanged: () => void;
 }) {
   const [amount, setAmount] = useState("");
@@ -168,7 +192,14 @@ function CofrinhoCard({
   return (
     <div className="rounded-lg border border-zinc-100 p-3 dark:border-zinc-800">
       <div className="flex items-center justify-between">
-        <p className="font-medium text-zinc-800 dark:text-zinc-200">{cofrinho.name}</p>
+        <p className="font-medium text-zinc-800 dark:text-zinc-200">
+          {cofrinho.name}
+          {showAccountName && (
+            <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-xs font-normal text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+              {cofrinho.account_name}
+            </span>
+          )}
+        </p>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {cofrinho.cdi_percentage}% do CDI
         </p>
@@ -200,33 +231,35 @@ function CofrinhoCard({
         </div>
       )}
 
-      <div className="mt-3 flex gap-2">
-        <input
-          type="number"
-          step="0.01"
-          min="0.01"
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
-          placeholder="0,00"
-          className="w-28 rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
-        />
-        <button
-          type="button"
-          disabled={status === "saving" || !amount}
-          onClick={() => move("deposit")}
-          className="rounded-md bg-green-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-60"
-        >
-          Depositar
-        </button>
-        <button
-          type="button"
-          disabled={status === "saving" || !amount}
-          onClick={() => move("withdrawal")}
-          className="rounded-md bg-zinc-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-60"
-        >
-          Resgatar
-        </button>
-      </div>
+      {canManage && (
+        <div className="mt-3 flex gap-2">
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            placeholder="0,00"
+            className="w-28 rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          />
+          <button
+            type="button"
+            disabled={status === "saving" || !amount}
+            onClick={() => move("deposit")}
+            className="rounded-md bg-green-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-60"
+          >
+            Depositar
+          </button>
+          <button
+            type="button"
+            disabled={status === "saving" || !amount}
+            onClick={() => move("withdrawal")}
+            className="rounded-md bg-zinc-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-60"
+          >
+            Resgatar
+          </button>
+        </div>
+      )}
 
       {status === "error" && (
         <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errorMessage}</p>

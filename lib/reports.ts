@@ -54,15 +54,22 @@ function getBucketRange(
   return { start, end, label: String(year) };
 }
 
-async function getIncomeAndExpense(startInclusive: string, endInclusive: string) {
+async function getIncomeAndExpense(
+  accountIds: number[],
+  startInclusive: string,
+  endInclusive: string
+) {
+  if (accountIds.length === 0) return { income: 0, expense: 0 };
+
   const db = await getDb();
+  const placeholders = accountIds.map((_, index) => `$${index + 3}`).join(", ");
   const result = await db.query<{ income: number; expense: number }>(
     `SELECT
        COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS income,
        COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS expense
      FROM transactions
-     WHERE occurred_on BETWEEN $1 AND $2`,
-    [startInclusive, endInclusive]
+     WHERE occurred_on BETWEEN $1 AND $2 AND account_id IN (${placeholders})`,
+    [startInclusive, endInclusive, ...accountIds]
   );
   return {
     income: Number(result.rows[0].income),
@@ -71,6 +78,7 @@ async function getIncomeAndExpense(startInclusive: string, endInclusive: string)
 }
 
 export async function getTimeSeries(
+  accountIds: number[],
   period: ReportPeriod,
   referenceDate: Date = new Date()
 ): Promise<ReportPoint[]> {
@@ -79,7 +87,11 @@ export async function getTimeSeries(
 
   for (let periodsAgo = pointCount - 1; periodsAgo >= 0; periodsAgo--) {
     const { start, end, label } = getBucketRange(period, referenceDate, periodsAgo);
-    const { income, expense } = await getIncomeAndExpense(toIsoDate(start), toIsoDate(end));
+    const { income, expense } = await getIncomeAndExpense(
+      accountIds,
+      toIsoDate(start),
+      toIsoDate(end)
+    );
     points.push({ label, income, expense });
   }
 

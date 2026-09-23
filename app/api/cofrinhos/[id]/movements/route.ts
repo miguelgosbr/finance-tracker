@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getOwnedAccount } from "@/lib/accounts";
+import { getCurrentUser } from "@/lib/auth";
 import {
-  accrueAllYields,
-  listCofrinhos,
+  getCofrinho,
   recordMovement,
   type CofrinhoMovementType,
 } from "@/lib/cofrinhos";
@@ -13,12 +14,14 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
+
   const { id } = await params;
   const cofrinhoId = Number(id);
 
-  await accrueAllYields();
-  const cofrinho = (await listCofrinhos()).find((item) => item.id === cofrinhoId);
-  if (!cofrinho) {
+  const cofrinho = await getCofrinho(cofrinhoId);
+  if (!cofrinho || !(await getOwnedAccount(user.id, cofrinho.account_id))) {
     return NextResponse.json({ error: "Cofrinho não encontrado." }, { status: 404 });
   }
 
@@ -46,7 +49,7 @@ export async function POST(
     );
   }
 
-  if (type === "deposit" && amount > (await getCurrentBalance())) {
+  if (type === "deposit" && amount > (await getCurrentBalance(cofrinho.account_id))) {
     return NextResponse.json(
       { error: "O valor do depósito não pode ser maior que o saldo disponível em conta." },
       { status: 400 }

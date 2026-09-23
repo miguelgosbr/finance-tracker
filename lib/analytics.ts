@@ -36,18 +36,26 @@ function getMonthWindow(referenceDate: Date): MonthWindow {
   return { monthStart, today, dayOfMonth, daysInMonth };
 }
 
-async function getExpensesBetween(startInclusive: string, endInclusive: string): Promise<number> {
+async function getExpensesBetween(
+  accountIds: number[],
+  startInclusive: string,
+  endInclusive: string
+): Promise<number> {
+  if (accountIds.length === 0) return 0;
+
   const db = await getDb();
+  const placeholders = accountIds.map((_, index) => `$${index + 3}`).join(", ");
   const result = await db.query<{ total: number }>(
     `SELECT COALESCE(SUM(amount), 0) AS total
      FROM transactions
-     WHERE type = 'expense' AND occurred_on BETWEEN $1 AND $2`,
-    [startInclusive, endInclusive]
+     WHERE type = 'expense' AND occurred_on BETWEEN $1 AND $2 AND account_id IN (${placeholders})`,
+    [startInclusive, endInclusive, ...accountIds]
   );
   return Number(result.rows[0].total);
 }
 
 async function getTrailingAverageMonthlyExpense(
+  accountIds: number[],
   referenceDate: Date,
   monthsBack: number
 ): Promise<number> {
@@ -60,7 +68,7 @@ async function getTrailingAverageMonthlyExpense(
     const start = new Date(year, month, 1).toISOString().slice(0, 10);
     const end = new Date(year, month + 1, 0).toISOString().slice(0, 10);
 
-    totals.push(await getExpensesBetween(start, end));
+    totals.push(await getExpensesBetween(accountIds, start, end));
   }
 
   const monthsWithData = totals.filter((total) => total > 0);
@@ -69,11 +77,15 @@ async function getTrailingAverageMonthlyExpense(
   return monthsWithData.reduce((sum, total) => sum + total, 0) / monthsWithData.length;
 }
 
-async function resolveBudget(referenceDate: Date): Promise<number> {
-  const configured = Number(await getSetting("monthly_budget"));
+async function resolveBudget(
+  userId: number,
+  accountIds: number[],
+  referenceDate: Date
+): Promise<number> {
+  const configured = Number(await getSetting(userId, "monthly_budget"));
   if (Number.isFinite(configured) && configured > 0) return configured;
 
-  return getTrailingAverageMonthlyExpense(referenceDate, 3);
+  return getTrailingAverageMonthlyExpense(accountIds, referenceDate, 3);
 }
 
 function formatCurrency(value: number): string {
@@ -81,12 +93,14 @@ function formatCurrency(value: number): string {
 }
 
 export async function getBurnRateDiagnosis(
+  userId: number,
+  accountIds: number[],
   referenceDate: Date = new Date()
 ): Promise<BurnRateDiagnosis> {
   const { monthStart, today, dayOfMonth, daysInMonth } = getMonthWindow(referenceDate);
 
-  const budget = await resolveBudget(referenceDate);
-  const spentSoFar = await getExpensesBetween(monthStart, today);
+  const budget = await resolveBudget(userId, accountIds, referenceDate);
+  const spentSoFar = await getExpensesBetween(accountIds, monthStart, today);
   const daysRemaining = Math.max(daysInMonth - dayOfMonth, 0);
 
   if (budget <= 0) {

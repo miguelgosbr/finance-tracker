@@ -11,6 +11,13 @@ análises automáticas.
 
 ## ✨ Funcionalidades
 
+### 🔐 Contas de usuário e múltiplas contas financeiras
+- Login e cadastro com e-mail e senha (sessão própria, sem serviços de terceiros).
+- Cada usuário pode ter **várias contas financeiras** (ex.: conta pessoal, conta da pensão, conta de
+  terceiros, linha de crédito), cada uma com seu próprio saldo, cofrinhos e lançamentos.
+- Abas para alternar entre contas, mais uma aba **"Todas"** que consolida o saldo de todas as contas
+  e lista as movimentações identificando de qual conta é cada uma.
+
 ### 📝 Lançamento rápido de entradas e saídas
 - Registro de **despesas** com valor, descrição (ex.: "Almoço de trabalho"), categoria e data.
 - Registro de **receitas** (salário, freelas, rendimentos) com valor, fonte e data de recebimento.
@@ -50,6 +57,7 @@ análises automáticas.
 | Banco (dev/testes) | [PGlite](https://pglite.dev) (Postgres em memória) |
 | Testes        | [Vitest](https://vitest.dev)                  |
 | Deploy        | [Vercel](https://vercel.com)                  |
+| Autenticação  | Sessões próprias (cookie httpOnly) + [bcryptjs](https://github.com/dcodeIO/bcrypt.js) |
 
 ---
 
@@ -143,11 +151,15 @@ explicitamente em vez de perder dados silenciosamente.
 
 ```
 app/
-  api/            Rotas de API (transações, categorias, cofrinhos, relatórios, análise, configurações)
-  page.tsx        Página do dashboard (Server Component)
-components/        Componentes de UI (formulários, gráficos, cards, seções)
+  api/            Rotas de API (auth, contas, transações, categorias, cofrinhos, relatórios, configurações)
+  page.tsx        Dashboard (Server Component, exige login)
+  login/          Página de login
+  signup/         Página de cadastro
+components/        Componentes de UI (formulários, gráficos, cards, abas de conta)
 lib/              Camada de dados e motores de cálculo
   db.ts           Conexão e schema (PostgreSQL / PGlite)
+  auth.ts         Cadastro, login e sessões
+  accounts.ts     Contas financeiras do usuário
   transactions.ts Transações e saldo
   categories.ts   Categorias
   cofrinhos.ts     Cofrinhos e rendimento do CDI
@@ -162,4 +174,6 @@ tests/            Testes unitários (Vitest)
 ## 🔒 Segurança e dados
 
 - Nenhum segredo é versionado: credenciais ficam em variáveis de ambiente (`.env`, ignorado pelo Git).
-- Aplicação single-user, sem autenticação — pensada para uso pessoal.
+- Cada usuário só acessa seus próprios dados: todas as rotas de API validam a sessão e a propriedade
+  da conta/categoria/cofrinho antes de ler ou escrever.
+- Senhas com hash (bcrypt); sessões em cookie `httpOnly`, `SameSite=Lax`, expirando em 30 dias.
