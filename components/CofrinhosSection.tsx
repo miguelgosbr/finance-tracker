@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Cofrinho } from "@/lib/cofrinhos";
+import type { CofrinhoWithYield } from "@/lib/cofrinhos";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -9,7 +9,7 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
 });
 
 interface CofrinhosSectionProps {
-  cofrinhos: Cofrinho[];
+  cofrinhos: CofrinhoWithYield[];
   onChanged: () => void;
 }
 
@@ -128,7 +128,7 @@ function CofrinhoCard({
   cofrinho,
   onChanged,
 }: {
-  cofrinho: Cofrinho;
+  cofrinho: CofrinhoWithYield;
   onChanged: () => void;
 }) {
   const [amount, setAmount] = useState("");
@@ -178,6 +178,10 @@ function CofrinhoCard({
         {currencyFormatter.format(cofrinho.balance)}
       </p>
 
+      <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+        Rendeu {currencyFormatter.format(cofrinho.monthlyYield)} este mês
+      </p>
+
       {progress !== null && (
         <div className="mt-2">
           <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -187,7 +191,11 @@ function CofrinhoCard({
             />
           </div>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-            {progress.toFixed(0)}% da meta de {currencyFormatter.format(cofrinho.goal_amount!)}
+            {progress >= 100
+              ? `Meta de ${currencyFormatter.format(cofrinho.goal_amount!)} atingida!`
+              : `${progress.toFixed(0)}% da meta — faltam ${currencyFormatter.format(
+                  cofrinho.goal_amount! - cofrinho.balance
+                )}`}
           </p>
         </div>
       )}

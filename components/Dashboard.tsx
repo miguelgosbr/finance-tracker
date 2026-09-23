@@ -7,7 +7,7 @@ import { ReportsChart } from "@/components/ReportsChart";
 import { TransactionForm } from "@/components/TransactionForm";
 import type { BurnRateDiagnosis } from "@/lib/analytics";
 import type { Category } from "@/lib/categories";
-import type { Cofrinho } from "@/lib/cofrinhos";
+import type { CofrinhoWithYield } from "@/lib/cofrinhos";
 import type { ReportPeriod, ReportPoint } from "@/lib/reports";
 import type { Transaction } from "@/lib/transactions";
 
@@ -23,7 +23,7 @@ interface DashboardProps {
   initialBurnRate: BurnRateDiagnosis;
   initialReportPeriod: ReportPeriod;
   initialReportData: ReportPoint[];
-  initialCofrinhos: Cofrinho[];
+  initialCofrinhos: CofrinhoWithYield[];
 }
 
 export function Dashboard({
