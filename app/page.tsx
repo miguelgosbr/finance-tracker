@@ -7,7 +7,6 @@ import { listCategories } from "@/lib/categories";
 import { accrueYieldsForAccount, listCofrinhosForUser } from "@/lib/cofrinhos";
 import { getCreditLineStatus } from "@/lib/creditLine";
 import { getTimeSeries } from "@/lib/reports";
-import { getSetting } from "@/lib/settings";
 import { getCurrentBalance, listTransactionsForUser } from "@/lib/transactions";
 
 export const dynamic = "force-dynamic";
@@ -24,31 +23,20 @@ export default async function Home() {
     await accrueYieldsForAccount(selectedAccountId);
   }
 
-  const [
-    categories,
-    transactions,
-    balance,
-    burnRate,
-    reportData,
-    cofrinhos,
-    monthlyBudget,
-    cdiRateAnnual,
-    creditLine,
-  ] = await Promise.all([
-    listCategories(user.id),
-    selectedAccountId !== null
-      ? listTransactionsForUser(user.id, [selectedAccountId])
-      : Promise.resolve([]),
-    selectedAccountId !== null ? getCurrentBalance(selectedAccountId) : Promise.resolve(0),
-    getBurnRateDiagnosis(user.id, selectedAccountId !== null ? [selectedAccountId] : []),
-    getTimeSeries(selectedAccountId !== null ? [selectedAccountId] : [], "month"),
-    selectedAccountId !== null
-      ? listCofrinhosForUser(user.id, [selectedAccountId])
-      : Promise.resolve([]),
-    getSetting(user.id, "monthly_budget"),
-    getSetting(user.id, "cdi_rate_annual"),
-    selectedAccount ? getCreditLineStatus(selectedAccount) : Promise.resolve(null),
-  ]);
+  const [categories, transactions, balance, burnRate, reportData, cofrinhos, creditLine] =
+    await Promise.all([
+      listCategories(user.id),
+      selectedAccountId !== null
+        ? listTransactionsForUser(user.id, [selectedAccountId])
+        : Promise.resolve([]),
+      selectedAccountId !== null ? getCurrentBalance(selectedAccountId) : Promise.resolve(0),
+      getBurnRateDiagnosis(user.id, selectedAccountId !== null ? [selectedAccountId] : []),
+      getTimeSeries(selectedAccountId !== null ? [selectedAccountId] : [], "month"),
+      selectedAccountId !== null
+        ? listCofrinhosForUser(user.id, [selectedAccountId])
+        : Promise.resolve([]),
+      selectedAccount ? getCreditLineStatus(selectedAccount) : Promise.resolve(null),
+    ]);
 
   return (
     <Dashboard
@@ -62,10 +50,6 @@ export default async function Home() {
       initialReportPeriod="month"
       initialReportData={reportData}
       initialCofrinhos={cofrinhos}
-      initialSettings={{
-        monthly_budget: monthlyBudget ?? "",
-        cdi_rate_annual: cdiRateAnnual ?? "",
-      }}
       initialCreditLine={creditLine}
     />
   );

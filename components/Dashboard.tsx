@@ -1,15 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AccountTabs, type AccountFormInput } from "@/components/AccountTabs";
 import { getAccountTheme, hexToRgba } from "@/components/bankTheme";
 import { BurnRateCard } from "@/components/BurnRateCard";
 import { CofrinhosSection } from "@/components/CofrinhosSection";
 import { ReportsChart } from "@/components/ReportsChart";
-import { SettingsSection, type Settings } from "@/components/SettingsSection";
 import { TransactionForm } from "@/components/TransactionForm";
-import { TransactionRow } from "@/components/TransactionRow";
 import type { Account } from "@/lib/accounts";
 import type { BurnRateDiagnosis } from "@/lib/analytics";
 import type { Category } from "@/lib/categories";
@@ -36,7 +35,6 @@ interface DashboardProps {
   initialReportPeriod: ReportPeriod;
   initialReportData: ReportPoint[];
   initialCofrinhos: CofrinhoWithAccount[];
-  initialSettings: Settings;
   initialCreditLine: CreditLineStatus | null;
 }
 
@@ -51,7 +49,6 @@ export function Dashboard({
   initialReportPeriod,
   initialReportData,
   initialCofrinhos,
-  initialSettings,
   initialCreditLine,
 }: DashboardProps) {
   const router = useRouter();
@@ -160,47 +157,6 @@ export function Dashboard({
     await loadScopeData(String(data.id), reportPeriod);
   }
 
-  async function handleUpdateAccount(accountId: number, input: AccountFormInput) {
-    const response = await fetch(`/api/accounts/${accountId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toAccountBody(input)),
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error ?? "Não foi possível salvar a conta.");
-    }
-
-    setAccounts((previous) =>
-      previous.map((account) => (account.id === accountId ? data : account))
-    );
-
-    if (String(accountId) === scope) {
-      await loadScopeData(scope, reportPeriod);
-    }
-  }
-
-  async function handleDeleteAccount(accountId: number) {
-    const response = await fetch(`/api/accounts/${accountId}`, { method: "DELETE" });
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error ?? "Não foi possível excluir a conta.");
-    }
-
-    const remaining = accounts.filter((account) => account.id !== accountId);
-    setAccounts(remaining);
-
-    const nextScope = String(currentAccountId) === String(accountId)
-      ? remaining[0]
-        ? String(remaining[0].id)
-        : "all"
-      : scope;
-
-    setScope(nextScope);
-    await loadScopeData(nextScope, reportPeriod);
-  }
-
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
@@ -234,6 +190,14 @@ export function Dashboard({
               </span>
             )}
             <span className="text-xs text-zinc-400">{user.email}</span>
+            <Link
+              href="/editor"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-zinc-500 underline transition-colors hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+            >
+              Modo Editor
+            </Link>
             <button
               type="button"
               onClick={handleLogout}
@@ -249,8 +213,6 @@ export function Dashboard({
           scope={scope}
           onSelect={selectScope}
           onCreate={handleCreateAccount}
-          onUpdate={handleUpdateAccount}
-          onDelete={handleDeleteAccount}
         />
 
         <div
@@ -325,22 +287,37 @@ export function Dashboard({
           </h2>
           <ul className="flex flex-col gap-2">
             {transactions.slice(0, 10).map((transaction) => (
-              <TransactionRow
-                key={transaction.id}
-                transaction={transaction}
-                categories={categories}
-                showAccountName={isAll}
-                hasCreditLine={accountById(transaction.account_id)?.has_credit_line ?? false}
-                onChanged={refresh}
-              />
+              <li key={transaction.id} className="flex items-center justify-between text-sm">
+                <span className="text-zinc-600 dark:text-zinc-400">
+                  {transaction.description}
+                  {isAll && (
+                    <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                      {transaction.account_name}
+                    </span>
+                  )}
+                  {transaction.payment_method === "credit_line" && (
+                    <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                      crédito
+                    </span>
+                  )}
+                </span>
+                <span
+                  className={
+                    transaction.type === "income"
+                      ? "font-medium text-green-600 dark:text-green-400"
+                      : "font-medium text-red-600 dark:text-red-400"
+                  }
+                >
+                  {transaction.type === "income" ? "+" : "-"}
+                  {currencyFormatter.format(transaction.amount)}
+                </span>
+              </li>
             ))}
             {transactions.length === 0 && (
               <li className="text-sm text-zinc-400">Nenhum lançamento ainda.</li>
             )}
           </ul>
         </div>
-
-        <SettingsSection initialSettings={initialSettings} onSaved={refresh} />
       </main>
     </div>
   );
