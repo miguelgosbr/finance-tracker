@@ -46,7 +46,9 @@ function getBucketRange(
     return { start, end, label: start.toISOString().slice(0, 7) };
   }
 
-  const year = referenceDate.getFullYear() - periodsAgo;
+  // Years start at the current year and move forward, rather than into the
+  // past, since the app has no data before its own launch year.
+  const year = referenceDate.getFullYear() + (POINTS_BY_PERIOD.year - 1 - periodsAgo);
   const start = new Date(year, 0, 1);
   const end = new Date(year, 11, 31);
   return { start, end, label: String(year) };

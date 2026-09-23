@@ -65,7 +65,17 @@ export function ReportsChart({ period, data, isLoading, onPeriodChange }: Report
               tickFormatter={(value) => currencyFormatter.format(value as number)}
               width={80}
             />
-            <Tooltip formatter={(value) => currencyFormatter.format(Number(value))} />
+            <Tooltip
+              cursor={{ fill: "rgba(255,255,255,0.06)" }}
+              contentStyle={{
+                backgroundColor: "#18181b",
+                border: "1px solid #3f3f46",
+                borderRadius: 8,
+              }}
+              labelStyle={{ color: "#f4f4f5", fontWeight: 600, marginBottom: 4 }}
+              itemStyle={{ color: "#d4d4d8" }}
+              formatter={(value) => currencyFormatter.format(Number(value))}
+            />
             <Legend />
             <Bar dataKey="income" name="Receitas" fill="#16a34a" radius={[4, 4, 0, 0]} />
             <Bar dataKey="expense" name="Despesas" fill="#dc2626" radius={[4, 4, 0, 0]} />
