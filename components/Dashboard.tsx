@@ -4,6 +4,7 @@ import { useState } from "react";
 import { BurnRateCard } from "@/components/BurnRateCard";
 import { CofrinhosSection } from "@/components/CofrinhosSection";
 import { ReportsChart } from "@/components/ReportsChart";
+import { SettingsSection, type Settings } from "@/components/SettingsSection";
 import { TransactionForm } from "@/components/TransactionForm";
 import type { BurnRateDiagnosis } from "@/lib/analytics";
 import type { Category } from "@/lib/categories";
@@ -24,6 +25,7 @@ interface DashboardProps {
   initialReportPeriod: ReportPeriod;
   initialReportData: ReportPoint[];
   initialCofrinhos: CofrinhoWithYield[];
+  initialSettings: Settings;
 }
 
 export function Dashboard({
@@ -34,6 +36,7 @@ export function Dashboard({
   initialReportPeriod,
   initialReportData,
   initialCofrinhos,
+  initialSettings,
 }: DashboardProps) {
   const [categories, setCategories] = useState(initialCategories);
   const [transactions, setTransactions] = useState(initialTransactions);
@@ -69,6 +72,20 @@ export function Dashboard({
     setCofrinhos(await cofrinhosResponse.json());
     const transactionsData = await transactionsResponse.json();
     setBalance(transactionsData.balance);
+  }
+
+  async function refreshAfterSettings() {
+    setIsRefreshing(true);
+    try {
+      const [burnRateResponse, cofrinhosResponse] = await Promise.all([
+        fetch("/api/analytics/burn-rate"),
+        fetch("/api/cofrinhos"),
+      ]);
+      setBurnRate(await burnRateResponse.json());
+      setCofrinhos(await cofrinhosResponse.json());
+    } finally {
+      setIsRefreshing(false);
+    }
   }
 
   async function refresh() {
@@ -159,6 +176,8 @@ export function Dashboard({
             )}
           </ul>
         </div>
+
+        <SettingsSection initialSettings={initialSettings} onSaved={refreshAfterSettings} />
       </main>
     </div>
   );
