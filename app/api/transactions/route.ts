@@ -3,6 +3,7 @@ import { getOwnedAccount, resolveScopeAccountIds, type Account } from "@/lib/acc
 import { getCurrentUser } from "@/lib/auth";
 import { getOwnedCategory } from "@/lib/categories";
 import { accrueYieldsForAccount, accrueYieldsForUser } from "@/lib/cofrinhos";
+import { getTotalInvoicesForUser } from "@/lib/creditLine";
 import {
   createTransaction,
   getBalanceForAccounts,
@@ -25,7 +26,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Conta inválida." }, { status: 400 });
   }
 
-  if (!accountParam || accountParam === "all") {
+  const isAll = !accountParam || accountParam === "all";
+
+  if (isAll) {
     await accrueYieldsForUser(user.id);
   } else {
     await accrueYieldsForAccount(accountIds[0]);
@@ -34,6 +37,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     transactions: await listTransactionsForUser(user.id, accountIds),
     balance: await getBalanceForAccounts(accountIds),
+    totalInvoices: isAll ? await getTotalInvoicesForUser(user.id) : null,
   });
 }
 

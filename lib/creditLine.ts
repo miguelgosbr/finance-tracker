@@ -1,4 +1,4 @@
-import type { Account } from "./accounts";
+import { listAccounts, type Account } from "./accounts";
 import { getCreditLineUsageBetween } from "./transactions";
 
 export interface CreditLineStatus {
@@ -87,4 +87,24 @@ export async function getCreditLineStatus(
     closingDay,
     closingDate: toIsoDate(open.end),
   };
+}
+
+/**
+ * Sums the open + closed invoices across every credit-line account the user
+ * owns — the "Total de Faturas a Pagar" for the consolidated view. This is
+ * debt, kept separate from the user's real cash (Saldo Líquido).
+ */
+export async function getTotalInvoicesForUser(
+  userId: number,
+  referenceDate: Date = new Date()
+): Promise<number> {
+  const accounts = await listAccounts(userId);
+  const statuses = await Promise.all(
+    accounts.map((account) => getCreditLineStatus(account, referenceDate))
+  );
+
+  return statuses.reduce(
+    (total, status) => total + (status ? status.closedInvoice + status.openInvoice : 0),
+    0
+  );
 }

@@ -64,6 +64,7 @@ export function Dashboard({
   const [isReportLoading, setIsReportLoading] = useState(false);
   const [cofrinhos, setCofrinhos] = useState(initialCofrinhos);
   const [creditLine, setCreditLine] = useState(initialCreditLine);
+  const [totalInvoices, setTotalInvoices] = useState<number | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isAll = scope === "all";
@@ -96,6 +97,7 @@ export function Dashboard({
       const transactionsData = await transactionsResponse.json();
       setTransactions(transactionsData.transactions);
       setBalance(transactionsData.balance);
+      setTotalInvoices(transactionsData.totalInvoices ?? null);
       setBurnRate(await burnRateResponse.json());
       setCofrinhos(await cofrinhosResponse.json());
       setReportData(await reportResponse.json());
@@ -221,11 +223,16 @@ export function Dashboard({
           style={theme ? { borderTopColor: theme.color, borderTopWidth: 4 } : undefined}
         >
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {isAll ? "Saldo consolidado" : "Saldo atual"}
+            {isAll ? "Saldo Líquido" : "Saldo atual"}
           </p>
           <p className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
             {currencyFormatter.format(balance)}
           </p>
+          {isAll && (
+            <p className="mt-1 text-xs text-zinc-400">
+              Dinheiro real, sem contar limite de crédito
+            </p>
+          )}
 
           {creditLine && (
             <div className="mt-3 border-t border-zinc-100 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
@@ -243,6 +250,19 @@ export function Dashboard({
             </div>
           )}
         </div>
+
+        {isAll && totalInvoices !== null && totalInvoices > 0 && (
+          <div className="rounded-xl border border-amber-300 bg-white p-4 dark:border-amber-700 dark:bg-zinc-900">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Total de Faturas a Pagar</p>
+            <p className="text-2xl font-semibold text-amber-600 dark:text-amber-400">
+              {currencyFormatter.format(totalInvoices)}
+            </p>
+            <p className="mt-1 text-xs text-zinc-400">
+              Soma das faturas aberta e fechada de todas as contas com cartão — é dívida, não
+              entra no Saldo Líquido acima.
+            </p>
+          </div>
+        )}
 
         <BurnRateCard diagnosis={burnRate} />
 
