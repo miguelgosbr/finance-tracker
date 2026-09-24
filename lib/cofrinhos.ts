@@ -98,6 +98,38 @@ export async function getCofrinho(cofrinhoId: number): Promise<Cofrinho | null> 
   return result.rows[0] ?? null;
 }
 
+export interface CofrinhoEdit {
+  name: string;
+  cdiPercentage: number;
+  goalAmount: number | null;
+  accountId: number;
+}
+
+/**
+ * Updates a cofrinho's fields, including reassigning it to a different
+ * account owned by the same user (the balance moves with it — this is a
+ * reclassification, not a transfer, and never touches any account's cash).
+ */
+export async function updateCofrinho(
+  cofrinhoId: number,
+  edit: CofrinhoEdit
+): Promise<Cofrinho> {
+  const db = await getDb();
+  const result = await db.query<Cofrinho>(
+    `UPDATE cofrinhos
+     SET name = $2, cdi_percentage = $3, goal_amount = $4, account_id = $5
+     WHERE id = $1
+     RETURNING *`,
+    [cofrinhoId, edit.name.trim(), edit.cdiPercentage, edit.goalAmount, edit.accountId]
+  );
+  return result.rows[0];
+}
+
+export async function deleteCofrinho(cofrinhoId: number): Promise<void> {
+  const db = await getDb();
+  await db.query("DELETE FROM cofrinhos WHERE id = $1", [cofrinhoId]);
+}
+
 export async function listMovements(cofrinhoId: number): Promise<CofrinhoMovement[]> {
   const db = await getDb();
   const result = await db.query<CofrinhoMovement>(

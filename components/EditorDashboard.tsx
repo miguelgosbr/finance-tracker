@@ -4,10 +4,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { AccountManager } from "@/components/AccountManager";
 import type { AccountFormInput } from "@/components/AccountForm";
+import { CofrinhoManager, type CofrinhoFormInput } from "@/components/CofrinhoManager";
 import { SettingsSection, type Settings } from "@/components/SettingsSection";
 import { TransactionRow } from "@/components/TransactionRow";
 import type { Account } from "@/lib/accounts";
 import type { Category } from "@/lib/categories";
+import type { CofrinhoWithAccount } from "@/lib/cofrinhos";
 import type { TransactionWithAccount } from "@/lib/transactions";
 
 interface EditorDashboardProps {
@@ -16,6 +18,7 @@ interface EditorDashboardProps {
   initialCategories: Category[];
   initialTransactions: TransactionWithAccount[];
   initialSettings: Settings;
+  initialCofrinhos: CofrinhoWithAccount[];
 }
 
 export function EditorDashboard({
@@ -24,10 +27,47 @@ export function EditorDashboard({
   initialCategories,
   initialTransactions,
   initialSettings,
+  initialCofrinhos,
 }: EditorDashboardProps) {
   const [accounts, setAccounts] = useState(initialAccounts);
   const [transactions, setTransactions] = useState(initialTransactions);
+  const [cofrinhos, setCofrinhos] = useState(initialCofrinhos);
   const categories = initialCategories;
+
+  async function refreshCofrinhos() {
+    const response = await fetch("/api/cofrinhos?account=all");
+    setCofrinhos(await response.json());
+  }
+
+  async function handleUpdateCofrinho(cofrinhoId: number, input: CofrinhoFormInput) {
+    const response = await fetch(`/api/cofrinhos/${cofrinhoId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: input.name,
+        cdi_percentage: input.cdiPercentage,
+        goal_amount: input.goalAmount,
+        account_id: input.accountId,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error ?? "Não foi possível salvar o cofrinho.");
+    }
+
+    await refreshCofrinhos();
+  }
+
+  async function handleDeleteCofrinho(cofrinhoId: number) {
+    const response = await fetch(`/api/cofrinhos/${cofrinhoId}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error ?? "Não foi possível excluir o cofrinho.");
+    }
+
+    setCofrinhos((previous) => previous.filter((cofrinho) => cofrinho.id !== cofrinhoId));
+  }
 
   function accountById(accountId: number): Account | undefined {
     return accounts.find((account) => account.id === accountId);
@@ -104,6 +144,13 @@ export function EditorDashboard({
           accounts={accounts}
           onUpdate={handleUpdateAccount}
           onDelete={handleDeleteAccount}
+        />
+
+        <CofrinhoManager
+          cofrinhos={cofrinhos}
+          accounts={accounts}
+          onUpdate={handleUpdateCofrinho}
+          onDelete={handleDeleteCofrinho}
         />
 
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
