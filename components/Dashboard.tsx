@@ -9,6 +9,7 @@ import { BurnRateCard } from "@/components/BurnRateCard";
 import { CofrinhosSection } from "@/components/CofrinhosSection";
 import { ReportsChart } from "@/components/ReportsChart";
 import { TransactionForm } from "@/components/TransactionForm";
+import { TransferForm } from "@/components/TransferForm";
 import type { Account } from "@/lib/accounts";
 import type { BurnRateDiagnosis } from "@/lib/analytics";
 import type { Category } from "@/lib/categories";
@@ -16,6 +17,7 @@ import type { CofrinhoWithAccount } from "@/lib/cofrinhos";
 import type { CreditLineStatus } from "@/lib/creditLine";
 import type { ReportPeriod, ReportPoint } from "@/lib/reports";
 import type { TransactionWithAccount } from "@/lib/transactions";
+import type { TransferWithAccounts } from "@/lib/transfers";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -36,6 +38,7 @@ interface DashboardProps {
   initialReportData: ReportPoint[];
   initialCofrinhos: CofrinhoWithAccount[];
   initialCreditLine: CreditLineStatus | null;
+  initialTransfers: TransferWithAccounts[];
 }
 
 export function Dashboard({
@@ -50,6 +53,7 @@ export function Dashboard({
   initialReportData,
   initialCofrinhos,
   initialCreditLine,
+  initialTransfers,
 }: DashboardProps) {
   const router = useRouter();
 
@@ -65,6 +69,7 @@ export function Dashboard({
   const [cofrinhos, setCofrinhos] = useState(initialCofrinhos);
   const [creditLine, setCreditLine] = useState(initialCreditLine);
   const [totalInvoices, setTotalInvoices] = useState<number | null>(null);
+  const [transfers, setTransfers] = useState(initialTransfers);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isAll = scope === "all";
@@ -83,16 +88,23 @@ export function Dashboard({
       const targetAccountId = targetScope === "all" ? null : Number(targetScope);
       const targetAccount = targetAccountId !== null ? accountById(targetAccountId) : null;
 
-      const [transactionsResponse, burnRateResponse, cofrinhosResponse, reportResponse, creditLineResponse] =
-        await Promise.all([
-          fetch(`/api/transactions?${qs}`),
-          fetch(`/api/analytics/burn-rate?${qs}`),
-          fetch(`/api/cofrinhos?${qs}`),
-          fetch(`/api/reports?period=${period}&${qs}`),
-          targetAccount?.has_credit_line
-            ? fetch(`/api/accounts/${targetAccount.id}/credit-line`)
-            : Promise.resolve(null),
-        ]);
+      const [
+        transactionsResponse,
+        burnRateResponse,
+        cofrinhosResponse,
+        reportResponse,
+        creditLineResponse,
+        transfersResponse,
+      ] = await Promise.all([
+        fetch(`/api/transactions?${qs}`),
+        fetch(`/api/analytics/burn-rate?${qs}`),
+        fetch(`/api/cofrinhos?${qs}`),
+        fetch(`/api/reports?period=${period}&${qs}`),
+        targetAccount?.has_credit_line
+          ? fetch(`/api/accounts/${targetAccount.id}/credit-line`)
+          : Promise.resolve(null),
+        fetch(`/api/transfers?${qs}`),
+      ]);
 
       const transactionsData = await transactionsResponse.json();
       setTransactions(transactionsData.transactions);
@@ -102,6 +114,7 @@ export function Dashboard({
       setCofrinhos(await cofrinhosResponse.json());
       setReportData(await reportResponse.json());
       setCreditLine(creditLineResponse ? await creditLineResponse.json() : null);
+      setTransfers(await transfersResponse.json());
     } finally {
       setIsRefreshing(false);
     }
@@ -304,6 +317,14 @@ export function Dashboard({
           </div>
         )}
 
+        {!isAll && currentAccountId !== null && (
+          <TransferForm
+            accounts={accounts}
+            defaultFromAccountId={currentAccountId}
+            onCreated={refresh}
+          />
+        )}
+
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
             Últimos lançamentos
@@ -341,6 +362,29 @@ export function Dashboard({
             )}
           </ul>
         </div>
+
+        {transfers.length > 0 && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              Transferências
+            </h2>
+            <ul className="flex flex-col gap-2">
+              {transfers.slice(0, 10).map((transfer) => (
+                <li key={transfer.id} className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-600 dark:text-zinc-400">
+                    {transfer.from_account_name} → {transfer.to_account_name}
+                    {transfer.description && (
+                      <span className="ml-2 text-xs text-zinc-400">{transfer.description}</span>
+                    )}
+                  </span>
+                  <span className="font-medium text-zinc-500 dark:text-zinc-400">
+                    {currencyFormatter.format(transfer.amount)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </main>
     </div>
   );

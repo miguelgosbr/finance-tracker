@@ -232,6 +232,30 @@ async function runMigrations(db: Queryable) {
       PRIMARY KEY (user_id, key)
     );
   `);
+
+  // Transfers move cash between two of the user's own accounts without ever
+  // touching `transactions`, so they never show up as income/expense in the
+  // reports or burn-rate engine.
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS transfers (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      from_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      to_account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+      amount DOUBLE PRECISION NOT NULL CHECK (amount > 0),
+      description TEXT NOT NULL DEFAULT '',
+      occurred_on TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (now())::text,
+      CHECK (from_account_id <> to_account_id)
+    );
+  `);
+
+  await db.query(
+    `CREATE INDEX IF NOT EXISTS idx_transfers_from_account ON transfers(from_account_id);`
+  );
+  await db.query(
+    `CREATE INDEX IF NOT EXISTS idx_transfers_to_account ON transfers(to_account_id);`
+  );
 }
 
 export async function getDb(): Promise<Queryable> {

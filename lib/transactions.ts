@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import { getTransferNetForAccounts } from "./transfers";
 
 export type TransactionType = "income" | "expense";
 export type PaymentMethod = "account" | "credit_line";
@@ -172,7 +173,13 @@ export async function getBalanceForAccounts(accountIds: number[]): Promise<numbe
     accountIds
   );
 
-  return Number(transactionsResult.rows[0].net) - Number(cofrinhosResult.rows[0].total);
+  const transferNet = await getTransferNetForAccounts(accountIds);
+
+  return (
+    Number(transactionsResult.rows[0].net) -
+    Number(cofrinhosResult.rows[0].total) +
+    transferNet
+  );
 }
 
 export async function getCurrentBalance(accountId: number): Promise<number> {

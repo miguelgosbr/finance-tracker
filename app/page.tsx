@@ -8,6 +8,7 @@ import { accrueYieldsForAccount, listCofrinhosForUser } from "@/lib/cofrinhos";
 import { getCreditLineStatus } from "@/lib/creditLine";
 import { getTimeSeries } from "@/lib/reports";
 import { getCurrentBalance, listTransactionsForUser } from "@/lib/transactions";
+import { listTransfersForUser } from "@/lib/transfers";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export default async function Home() {
     await accrueYieldsForAccount(selectedAccountId);
   }
 
-  const [categories, transactions, balance, burnRate, reportData, cofrinhos, creditLine] =
+  const [categories, transactions, balance, burnRate, reportData, cofrinhos, creditLine, transfers] =
     await Promise.all([
       listCategories(user.id),
       selectedAccountId !== null
@@ -36,6 +37,9 @@ export default async function Home() {
         ? listCofrinhosForUser(user.id, [selectedAccountId])
         : Promise.resolve([]),
       selectedAccount ? getCreditLineStatus(selectedAccount) : Promise.resolve(null),
+      selectedAccountId !== null
+        ? listTransfersForUser(user.id, [selectedAccountId])
+        : Promise.resolve([]),
     ]);
 
   return (
@@ -51,6 +55,7 @@ export default async function Home() {
       initialReportData={reportData}
       initialCofrinhos={cofrinhos}
       initialCreditLine={creditLine}
+      initialTransfers={transfers}
     />
   );
 }
