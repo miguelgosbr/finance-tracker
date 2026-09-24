@@ -3,6 +3,7 @@ import { getTransferNetForAccounts } from "./transfers";
 
 export type TransactionType = "income" | "expense";
 export type PaymentMethod = "account" | "credit_line";
+export type TransactionStatus = "paid" | "pending";
 
 export interface Transaction {
   id: number;
@@ -13,6 +14,7 @@ export interface Transaction {
   category_id: number;
   occurred_on: string;
   payment_method: PaymentMethod;
+  status: TransactionStatus;
   created_at: string;
 }
 
@@ -28,6 +30,7 @@ export interface NewTransaction {
   category_id: number;
   occurred_on: string;
   paymentMethod?: PaymentMethod;
+  status?: TransactionStatus;
 }
 
 export interface TransactionEdit {
@@ -37,6 +40,7 @@ export interface TransactionEdit {
   category_id: number;
   occurred_on: string;
   paymentMethod: PaymentMethod;
+  status: TransactionStatus;
 }
 
 /**
@@ -77,8 +81,8 @@ export async function listTransactionsForUser(
 export async function createTransaction(input: NewTransaction): Promise<Transaction> {
   const db = await getDb();
   const result = await db.query<Transaction>(
-    `INSERT INTO transactions (account_id, type, amount, description, category_id, occurred_on, payment_method)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO transactions (account_id, type, amount, description, category_id, occurred_on, payment_method, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
     [
       input.account_id,
@@ -88,6 +92,7 @@ export async function createTransaction(input: NewTransaction): Promise<Transact
       input.category_id,
       input.occurred_on,
       input.paymentMethod ?? "account",
+      input.status ?? "paid",
     ]
   );
   return result.rows[0];
@@ -120,7 +125,8 @@ export async function updateTransaction(
   const db = await getDb();
   const result = await db.query<Transaction>(
     `UPDATE transactions
-     SET type = $2, amount = $3, description = $4, category_id = $5, occurred_on = $6, payment_method = $7
+     SET type = $2, amount = $3, description = $4, category_id = $5, occurred_on = $6,
+         payment_method = $7, status = $8
      WHERE id = $1
      RETURNING *`,
     [
@@ -131,7 +137,24 @@ export async function updateTransaction(
       edit.category_id,
       edit.occurred_on,
       edit.paymentMethod,
+      edit.status,
     ]
+  );
+  return result.rows[0];
+}
+
+/** Quick shortcut for the common case: flip a transaction straight to 'paid'. */
+export async function markTransactionPaid(
+  userId: number,
+  transactionId: number
+): Promise<Transaction | null> {
+  const owned = await getOwnedTransaction(userId, transactionId);
+  if (!owned) return null;
+
+  const db = await getDb();
+  const result = await db.query<Transaction>(
+    "UPDATE transactions SET status = 'paid' WHERE id = $1 RETURNING *",
+    [transactionId]
   );
   return result.rows[0];
 }
@@ -154,6 +177,8 @@ export async function getBalanceForAccounts(accountIds: number[]): Promise<numbe
   // Expenses paid via a credit line don't leave the account's cash on hand
   // immediately — they accrue on the invoice instead, so they're excluded
   // from the cash balance (see getCreditLineUsageBetween for that tally).
+  // Pending transactions (planned but not yet actually debited/credited)
+  // are excluded too — see getPendingSummary for the projected view.
   const transactionsResult = await db.query<{ net: number }>(
     `SELECT
        COALESCE(SUM(
@@ -164,7 +189,7 @@ export async function getBalanceForAccounts(accountIds: number[]): Promise<numbe
          END
        ), 0) AS net
      FROM transactions
-     WHERE account_id IN (${placeholders})`,
+     WHERE account_id IN (${placeholders}) AND status = 'paid'`,
     accountIds
   );
 
@@ -206,8 +231,45 @@ export async function getCreditLineUsageBetween(
     `SELECT COALESCE(SUM(amount), 0) AS total
      FROM transactions
      WHERE account_id = $1 AND type = 'expense' AND payment_method = 'credit_line'
-       AND occurred_on BETWEEN $2 AND $3`,
+       AND status = 'paid' AND occurred_on BETWEEN $2 AND $3`,
     [accountId, startInclusive, endInclusive]
   );
   return Number(result.rows[0].total);
+}
+
+export interface PendingSummary {
+  pendingIncome: number;
+  pendingExpense: number;
+}
+
+/** Pending income/expense this month — planned cash flow not yet reflected in the balance. */
+export async function getPendingSummary(
+  accountIds: number[],
+  referenceDate: Date = new Date()
+): Promise<PendingSummary> {
+  if (accountIds.length === 0) return { pendingIncome: 0, pendingExpense: 0 };
+
+  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)
+    .toISOString()
+    .slice(0, 10);
+  const monthEnd = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0)
+    .toISOString()
+    .slice(0, 10);
+
+  const db = await getDb();
+  const placeholders = accountIds.map((_, index) => `$${index + 3}`).join(", ");
+  const result = await db.query<{ pending_income: number; pending_expense: number }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END), 0) AS pending_income,
+       COALESCE(SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END), 0) AS pending_expense
+     FROM transactions
+     WHERE status = 'pending' AND occurred_on BETWEEN $1 AND $2
+       AND account_id IN (${placeholders})`,
+    [monthStart, monthEnd, ...accountIds]
+  );
+
+  return {
+    pendingIncome: Number(result.rows[0].pending_income),
+    pendingExpense: Number(result.rows[0].pending_expense),
+  };
 }

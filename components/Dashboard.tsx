@@ -39,6 +39,8 @@ interface DashboardProps {
   initialCofrinhos: CofrinhoWithAccount[];
   initialCreditLine: CreditLineStatus | null;
   initialTransfers: TransferWithAccounts[];
+  initialPendingIncome: number;
+  initialPendingExpense: number;
 }
 
 export function Dashboard({
@@ -54,6 +56,8 @@ export function Dashboard({
   initialCofrinhos,
   initialCreditLine,
   initialTransfers,
+  initialPendingIncome,
+  initialPendingExpense,
 }: DashboardProps) {
   const router = useRouter();
 
@@ -69,6 +73,8 @@ export function Dashboard({
   const [cofrinhos, setCofrinhos] = useState(initialCofrinhos);
   const [creditLine, setCreditLine] = useState(initialCreditLine);
   const [totalInvoices, setTotalInvoices] = useState<number | null>(null);
+  const [pendingIncome, setPendingIncome] = useState(initialPendingIncome);
+  const [pendingExpense, setPendingExpense] = useState(initialPendingExpense);
   const [transfers, setTransfers] = useState(initialTransfers);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -110,6 +116,8 @@ export function Dashboard({
       setTransactions(transactionsData.transactions);
       setBalance(transactionsData.balance);
       setTotalInvoices(transactionsData.totalInvoices ?? null);
+      setPendingIncome(transactionsData.pendingIncome ?? 0);
+      setPendingExpense(transactionsData.pendingExpense ?? 0);
       setBurnRate(await burnRateResponse.json());
       setCofrinhos(await cofrinhosResponse.json());
       setReportData(await reportResponse.json());
@@ -244,6 +252,16 @@ export function Dashboard({
           {isAll && (
             <p className="mt-1 text-xs text-zinc-400">
               Dinheiro real, sem contar limite de crédito
+            </p>
+          )}
+
+          {(pendingIncome > 0 || pendingExpense > 0) && (
+            <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+              {pendingExpense > 0 &&
+                `${currencyFormatter.format(pendingExpense)} em contas pendentes este mês`}
+              {pendingExpense > 0 && pendingIncome > 0 && " · "}
+              {pendingIncome > 0 &&
+                `${currencyFormatter.format(pendingIncome)} a receber este mês`}
             </p>
           )}
 

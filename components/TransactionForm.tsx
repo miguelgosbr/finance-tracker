@@ -2,12 +2,17 @@
 
 import { useState } from "react";
 import type { Category } from "@/lib/categories";
-import type { TransactionType } from "@/lib/transactions";
+import type { TransactionStatus, TransactionType } from "@/lib/transactions";
 
 const NEW_CATEGORY_VALUE = "__new__";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+/** Dates in the future default to "pending" — nothing has actually happened yet. */
+function defaultStatusFor(occurredOn: string): TransactionStatus {
+  return occurredOn > today() ? "pending" : "paid";
 }
 
 const COPY: Record<
@@ -70,14 +75,15 @@ export function TransactionForm({
   );
   const [newCategoryName, setNewCategoryName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"account" | "credit_line">("account");
-  const [status, setStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [txStatus, setTxStatus] = useState<TransactionStatus>(defaultStatusFor(today()));
+  const [formStatus, setFormStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
   const isCreatingCategory = categoryId === NEW_CATEGORY_VALUE;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setStatus("saving");
+    setFormStatus("saving");
     setErrorMessage("");
 
     try {
@@ -113,6 +119,7 @@ export function TransactionForm({
           category_id: Number(resolvedCategoryId),
           occurred_on: occurredOn,
           payment_method: type === "expense" ? paymentMethod : "account",
+          status: txStatus,
         }),
       });
 
@@ -126,11 +133,12 @@ export function TransactionForm({
       setNewCategoryName("");
       setOccurredOn(today());
       setPaymentMethod("account");
-      setStatus("success");
-      window.setTimeout(() => setStatus("idle"), 2500);
+      setTxStatus(defaultStatusFor(today()));
+      setFormStatus("success");
+      window.setTimeout(() => setFormStatus("idle"), 2500);
       onCreated();
     } catch (error) {
-      setStatus("error");
+      setFormStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Erro inesperado.");
     }
   }
@@ -160,7 +168,10 @@ export function TransactionForm({
             type="date"
             required
             value={occurredOn}
-            onChange={(event) => setOccurredOn(event.target.value)}
+            onChange={(event) => {
+              setOccurredOn(event.target.value);
+              setTxStatus(defaultStatusFor(event.target.value));
+            }}
             className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
           />
         </label>
@@ -222,11 +233,23 @@ export function TransactionForm({
         </label>
       )}
 
-      {status === "error" && (
+      <label className="flex flex-col gap-1 text-sm">
+        Status
+        <select
+          value={txStatus}
+          onChange={(event) => setTxStatus(event.target.value as TransactionStatus)}
+          className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+        >
+          <option value="paid">{type === "income" ? "Recebido" : "Pago"}</option>
+          <option value="pending">Pendente</option>
+        </select>
+      </label>
+
+      {formStatus === "error" && (
         <p className="text-sm text-red-600 dark:text-red-400">{errorMessage}</p>
       )}
 
-      {status === "success" && (
+      {formStatus === "success" && (
         <p className="text-sm font-medium text-green-600 dark:text-green-400">
           ✓ Lançamento registrado!
         </p>
@@ -234,10 +257,10 @@ export function TransactionForm({
 
       <button
         type="submit"
-        disabled={status === "saving"}
+        disabled={formStatus === "saving"}
         className={`mt-1 rounded-md px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-60 ${copy.buttonClassName}`}
       >
-        {status === "saving" ? copy.savingLabel : copy.submitLabel}
+        {formStatus === "saving" ? copy.savingLabel : copy.submitLabel}
       </button>
     </form>
   );

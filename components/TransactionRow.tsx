@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import type { Category } from "@/lib/categories";
-import type { PaymentMethod, TransactionType, TransactionWithAccount } from "@/lib/transactions";
+import type {
+  PaymentMethod,
+  TransactionStatus,
+  TransactionType,
+  TransactionWithAccount,
+} from "@/lib/transactions";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -25,7 +30,7 @@ export function TransactionRow({
   onChanged,
 }: TransactionRowProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
+  const [formStatus, setFormStatus] = useState<"idle" | "saving" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
   const [type, setType] = useState<TransactionType>(transaction.type);
@@ -34,10 +39,11 @@ export function TransactionRow({
   const [categoryId, setCategoryId] = useState(String(transaction.category_id));
   const [occurredOn, setOccurredOn] = useState(transaction.occurred_on);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(transaction.payment_method);
+  const [txStatus, setTxStatus] = useState<TransactionStatus>(transaction.status);
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
-    setStatus("saving");
+    setFormStatus("saving");
     setErrorMessage("");
 
     try {
@@ -51,6 +57,7 @@ export function TransactionRow({
           category_id: Number(categoryId),
           occurred_on: occurredOn,
           payment_method: type === "expense" ? paymentMethod : "account",
+          status: txStatus,
         }),
       });
 
@@ -59,11 +66,11 @@ export function TransactionRow({
         throw new Error(data.error ?? "Não foi possível salvar o lançamento.");
       }
 
-      setStatus("idle");
+      setFormStatus("idle");
       setIsEditing(false);
       onChanged();
     } catch (error) {
-      setStatus("error");
+      setFormStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Erro inesperado.");
     }
   }
@@ -75,11 +82,22 @@ export function TransactionRow({
     const response = await fetch(`/api/transactions/${transaction.id}`, { method: "DELETE" });
     if (!response.ok) {
       const data = await response.json();
-      setStatus("error");
+      setFormStatus("error");
       setErrorMessage(data.error ?? "Não foi possível excluir o lançamento.");
       return;
     }
 
+    onChanged();
+  }
+
+  async function handleMarkPaid() {
+    const response = await fetch(`/api/transactions/${transaction.id}/pay`, { method: "POST" });
+    if (!response.ok) {
+      const data = await response.json();
+      setFormStatus("error");
+      setErrorMessage(data.error ?? "Não foi possível marcar como pago.");
+      return;
+    }
     onChanged();
   }
 
@@ -98,6 +116,11 @@ export function TransactionRow({
               crédito
             </span>
           )}
+          {transaction.status === "pending" && (
+            <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+              pendente
+            </span>
+          )}
         </span>
         <span
           className={
@@ -109,6 +132,15 @@ export function TransactionRow({
           {transaction.type === "income" ? "+" : "-"}
           {currencyFormatter.format(transaction.amount)}
         </span>
+        {transaction.status === "pending" && (
+          <button
+            type="button"
+            onClick={handleMarkPaid}
+            className="whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium text-green-600 hover:bg-green-100 dark:text-green-400 dark:hover:bg-green-900/30"
+          >
+            Marcar como {transaction.type === "income" ? "recebido" : "pago"}
+          </button>
+        )}
         <button
           type="button"
           aria-label="Editar lançamento"
@@ -208,12 +240,24 @@ export function TransactionRow({
           </label>
         )}
 
+        <label className="flex flex-col gap-1 text-xs">
+          Status
+          <select
+            value={txStatus}
+            onChange={(event) => setTxStatus(event.target.value as TransactionStatus)}
+            className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-800"
+          >
+            <option value="paid">{type === "income" ? "Recebido" : "Pago"}</option>
+            <option value="pending">Pendente</option>
+          </select>
+        </label>
+
         <button
           type="submit"
-          disabled={status === "saving"}
+          disabled={formStatus === "saving"}
           className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
         >
-          {status === "saving" ? "Salvando..." : "Salvar"}
+          {formStatus === "saving" ? "Salvando..." : "Salvar"}
         </button>
         <button
           type="button"
@@ -223,7 +267,7 @@ export function TransactionRow({
           Cancelar
         </button>
 
-        {status === "error" && (
+        {formStatus === "error" && (
           <p className="w-full text-xs text-red-600 dark:text-red-400">{errorMessage}</p>
         )}
       </form>

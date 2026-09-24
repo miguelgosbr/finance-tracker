@@ -7,13 +7,16 @@ import { getTotalInvoicesForUser } from "@/lib/creditLine";
 import {
   createTransaction,
   getBalanceForAccounts,
+  getPendingSummary,
   listTransactionsForUser,
   type PaymentMethod,
+  type TransactionStatus,
   type TransactionType,
 } from "@/lib/transactions";
 
 const VALID_TYPES: TransactionType[] = ["income", "expense"];
 const VALID_PAYMENT_METHODS: PaymentMethod[] = ["account", "credit_line"];
+const VALID_STATUSES: TransactionStatus[] = ["paid", "pending"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function GET(request: NextRequest) {
@@ -34,10 +37,14 @@ export async function GET(request: NextRequest) {
     await accrueYieldsForAccount(accountIds[0]);
   }
 
+  const pending = await getPendingSummary(accountIds);
+
   return NextResponse.json({
     transactions: await listTransactionsForUser(user.id, accountIds),
     balance: await getBalanceForAccounts(accountIds),
     totalInvoices: isAll ? await getTotalInvoicesForUser(user.id) : null,
+    pendingIncome: pending.pendingIncome,
+    pendingExpense: pending.pendingExpense,
   });
 }
 
@@ -52,14 +59,16 @@ export async function parseTransactionInput(
   userId: number,
   account: Account | null
 ) {
-  const { type, amount, description, category_id, occurred_on, payment_method } = body as {
-    type?: unknown;
-    amount?: unknown;
-    description?: unknown;
-    category_id?: unknown;
-    occurred_on?: unknown;
-    payment_method?: unknown;
-  };
+  const { type, amount, description, category_id, occurred_on, payment_method, status } =
+    body as {
+      type?: unknown;
+      amount?: unknown;
+      description?: unknown;
+      category_id?: unknown;
+      occurred_on?: unknown;
+      payment_method?: unknown;
+      status?: unknown;
+    };
 
   if (typeof type !== "string" || !VALID_TYPES.includes(type as TransactionType)) {
     return { error: "O tipo deve ser 'income' ou 'expense'." } as const;
@@ -98,6 +107,13 @@ export async function parseTransactionInput(
     } as const;
   }
 
+  const resolvedStatus: TransactionStatus =
+    status === undefined || status === null ? "paid" : (status as TransactionStatus);
+
+  if (!VALID_STATUSES.includes(resolvedStatus)) {
+    return { error: "O status deve ser 'paid' ou 'pending'." } as const;
+  }
+
   return {
     input: {
       type: type as TransactionType,
@@ -106,6 +122,7 @@ export async function parseTransactionInput(
       category_id,
       occurred_on,
       paymentMethod,
+      status: resolvedStatus,
     },
   } as const;
 }

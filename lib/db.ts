@@ -121,6 +121,23 @@ async function runMigrations(db: Queryable) {
     END $$;
   `);
 
+  // transactions gained a status (paid/pending) for planning cash flow ahead
+  // of the actual debit/credit. Detect the old shape and drop just that
+  // table so it recreates with the column — nothing references transactions,
+  // so no cascade needed.
+  await db.query(`
+    DO $$ BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.tables WHERE table_name = 'transactions'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'transactions' AND column_name = 'status'
+      ) THEN
+        DROP TABLE IF EXISTS transactions CASCADE;
+      END IF;
+    END $$;
+  `);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -180,6 +197,7 @@ async function runMigrations(db: Queryable) {
       category_id INTEGER NOT NULL REFERENCES categories(id),
       occurred_on TEXT NOT NULL,
       payment_method TEXT NOT NULL DEFAULT 'account' CHECK (payment_method IN ('account', 'credit_line')),
+      status TEXT NOT NULL DEFAULT 'paid' CHECK (status IN ('paid', 'pending')),
       created_at TEXT NOT NULL DEFAULT (now())::text
     );
   `);
