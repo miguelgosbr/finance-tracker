@@ -32,11 +32,13 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
   const body = await request.json();
-  const { account_id, name, cdi_percentage, goal_amount } = body as {
+  const { account_id, name, cdi_percentage, goal_amount, initial_balance, initial_yield } = body as {
     account_id?: unknown;
     name?: unknown;
     cdi_percentage?: unknown;
     goal_amount?: unknown;
+    initial_balance?: unknown;
+    initial_yield?: unknown;
   };
 
   if (typeof account_id !== "number" || !Number.isInteger(account_id)) {
@@ -72,6 +74,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const cofrinho = await createCofrinho(account_id, name, cdi_percentage, goal_amount ?? null);
+  for (const value of [initial_balance, initial_yield]) {
+    if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) {
+      return NextResponse.json(
+        { error: "Saldo inicial e rendimento devem ser números maiores ou iguais a zero." },
+        { status: 400 }
+      );
+    }
+  }
+
+  const cofrinho = await createCofrinho(
+    account_id,
+    name,
+    cdi_percentage,
+    goal_amount ?? null,
+    (initial_balance as number | undefined) ?? 0,
+    (initial_yield as number | undefined) ?? 0
+  );
   return NextResponse.json(cofrinho, { status: 201 });
 }

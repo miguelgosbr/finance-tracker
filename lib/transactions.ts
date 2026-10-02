@@ -13,6 +13,7 @@ export interface Transaction {
   description: string;
   category_id: number;
   occurred_on: string;
+  occurred_time: string | null;
   payment_method: PaymentMethod;
   status: TransactionStatus;
   created_at: string;
@@ -29,6 +30,7 @@ export interface NewTransaction {
   description: string;
   category_id: number;
   occurred_on: string;
+  occurredTime?: string | null;
   paymentMethod?: PaymentMethod;
   status?: TransactionStatus;
 }
@@ -39,6 +41,7 @@ export interface TransactionEdit {
   description: string;
   category_id: number;
   occurred_on: string;
+  occurredTime?: string | null;
   paymentMethod: PaymentMethod;
   status: TransactionStatus;
 }
@@ -81,8 +84,8 @@ export async function listTransactionsForUser(
 export async function createTransaction(input: NewTransaction): Promise<Transaction> {
   const db = await getDb();
   const result = await db.query<Transaction>(
-    `INSERT INTO transactions (account_id, type, amount, description, category_id, occurred_on, payment_method, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO transactions (account_id, type, amount, description, category_id, occurred_on, payment_method, status, occurred_time)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
       input.account_id,
@@ -93,6 +96,7 @@ export async function createTransaction(input: NewTransaction): Promise<Transact
       input.occurred_on,
       input.paymentMethod ?? "account",
       input.status ?? "paid",
+      input.occurredTime ?? null,
     ]
   );
   return result.rows[0];
@@ -126,7 +130,7 @@ export async function updateTransaction(
   const result = await db.query<Transaction>(
     `UPDATE transactions
      SET type = $2, amount = $3, description = $4, category_id = $5, occurred_on = $6,
-         payment_method = $7, status = $8
+         payment_method = $7, status = $8, occurred_time = COALESCE($9, occurred_time)
      WHERE id = $1
      RETURNING *`,
     [
@@ -138,6 +142,7 @@ export async function updateTransaction(
       edit.occurred_on,
       edit.paymentMethod,
       edit.status,
+      edit.occurredTime ?? null,
     ]
   );
   return result.rows[0];
@@ -194,7 +199,7 @@ export async function getBalanceForAccounts(accountIds: number[]): Promise<numbe
   );
 
   const cofrinhosResult = await db.query<{ total: number }>(
-    `SELECT COALESCE(SUM(balance), 0) AS total FROM cofrinhos WHERE account_id IN (${placeholders})`,
+    `SELECT COALESCE(SUM(balance - opening_balance), 0) AS total FROM cofrinhos WHERE account_id IN (${placeholders})`,
     accountIds
   );
 

@@ -26,6 +26,8 @@ export function CofrinhosSection({
   const [name, setName] = useState("");
   const [cdiPercentage, setCdiPercentage] = useState("100");
   const [goalAmount, setGoalAmount] = useState("");
+  const [initialBalance, setInitialBalance] = useState("");
+  const [initialYield, setInitialYield] = useState("");
   const [createStatus, setCreateStatus] = useState<"idle" | "saving" | "error">("idle");
   const [createError, setCreateError] = useState("");
 
@@ -45,6 +47,8 @@ export function CofrinhosSection({
           name,
           cdi_percentage: Number(cdiPercentage),
           goal_amount: goalAmount ? Number(goalAmount) : null,
+          initial_balance: initialBalance ? Number(initialBalance) : undefined,
+          initial_yield: initialYield ? Number(initialYield) : undefined,
         }),
       });
 
@@ -56,6 +60,8 @@ export function CofrinhosSection({
       setName("");
       setCdiPercentage("100");
       setGoalAmount("");
+      setInitialBalance("");
+      setInitialYield("");
       setCreateStatus("idle");
       onChanged();
     } catch (error) {
@@ -126,6 +132,34 @@ export function CofrinhosSection({
               className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
             />
           </label>
+
+          <div className="flex gap-3">
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+              Saldo atual do cofrinho (opcional)
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={initialBalance}
+                onChange={(event) => setInitialBalance(event.target.value)}
+                placeholder="0,00"
+                className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
+
+            <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
+              Já rendeu (opcional)
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={initialYield}
+                onChange={(event) => setInitialYield(event.target.value)}
+                placeholder="0,00"
+                className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+              />
+            </label>
+          </div>
 
           {createStatus === "error" && (
             <p className="text-sm text-red-600 dark:text-red-400">{createError}</p>

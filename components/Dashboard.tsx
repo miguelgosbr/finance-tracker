@@ -38,9 +38,16 @@ function EyeIcon({ off }: { off: boolean }) {
 
 const PAGE_SIZE = 10;
 
+const stamp = (t: TransactionWithAccount) => `${t.occurred_on} ${t.occurred_time ?? "00:00"}`;
+
+function formatStamp(t: TransactionWithAccount): string {
+  const [year, month, day] = t.occurred_on.split("-");
+  return `${day}/${month}/${year}${t.occurred_time ? ` ${t.occurred_time}` : ""}`;
+}
+
 const SORTS = {
-  date_desc: { label: "Data (mais recentes)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => b.occurred_on.localeCompare(a.occurred_on) || b.id - a.id },
-  date_asc: { label: "Data (mais antigos)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => a.occurred_on.localeCompare(b.occurred_on) || a.id - b.id },
+  date_desc: { label: "Data (mais recentes)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => stamp(b).localeCompare(stamp(a)) || b.id - a.id },
+  date_asc: { label: "Data (mais antigos)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => stamp(a).localeCompare(stamp(b)) || a.id - b.id },
   name_asc: { label: "Nome (A-Z)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => a.description.localeCompare(b.description, "pt-BR") },
   name_desc: { label: "Nome (Z-A)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => b.description.localeCompare(a.description, "pt-BR") },
   amount_desc: { label: "Valor (maior)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => b.amount - a.amount },
@@ -295,9 +302,12 @@ export function Dashboard({
           className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
           style={theme ? { borderTopColor: theme.color, borderTopWidth: 4 } : undefined}
         >
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              {isAll ? "Saldo Líquido" : "Saldo atual"}
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            {isAll ? "Saldo Líquido" : "Saldo atual"}
+          </p>
+          <div className="flex items-center gap-2">
+            <p className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
+              {money(balance)}
             </p>
             <button
               type="button"
@@ -308,9 +318,6 @@ export function Dashboard({
               <EyeIcon off={hidden} />
             </button>
           </div>
-          <p className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
-            {money(balance)}
-          </p>
           {isAll && (
             <p className="mt-1 text-xs text-zinc-400">
               Dinheiro real, sem contar limite de crédito
@@ -399,6 +406,7 @@ export function Dashboard({
 
         {!isAll && currentAccountId !== null && (
           <TransferForm
+            key={currentAccountId}
             accounts={accounts}
             defaultFromAccountId={currentAccountId}
             onCreated={refresh}
@@ -408,7 +416,7 @@ export function Dashboard({
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-              Últimos lançamentos
+              Extratos
             </h2>
             <select
               value={sortKey}
@@ -416,7 +424,7 @@ export function Dashboard({
                 setSortKey(event.target.value as SortKey);
                 setPage(1);
               }}
-              aria-label="Ordenar lançamentos"
+              aria-label="Ordenar extratos"
               className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800"
             >
               {(Object.keys(SORTS) as SortKey[]).map((key) => (
@@ -431,6 +439,7 @@ export function Dashboard({
               <li key={transaction.id} className="flex items-center justify-between text-sm">
                 <span className="text-zinc-600 dark:text-zinc-400">
                   {transaction.description}
+                  <span className="ml-2 text-xs text-zinc-400">{formatStamp(transaction)}</span>
                   {isAll && (
                     <span className="ml-2 rounded bg-zinc-100 px-1.5 py-0.5 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                       {transaction.account_name}

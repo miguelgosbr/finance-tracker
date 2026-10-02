@@ -37,7 +37,7 @@ export function TransferForm({ accounts, defaultFromAccountId, onCreated }: Tran
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           from_account_id: Number(fromAccountId),
-          to_account_id: Number(toAccountId),
+          to_account_id: Number(effectiveToId),
           amount: Number(amount),
           description,
           occurred_on: occurredOn,
@@ -60,6 +60,14 @@ export function TransferForm({ accounts, defaultFromAccountId, onCreated }: Tran
       setErrorMessage(error instanceof Error ? error.message : "Erro inesperado.");
     }
   }
+
+  // The "Para" select only lists accounts other than "De"; when the stored
+  // value collides with "De" the select shows its first option, so submit
+  // that one instead of the stale state value.
+  const toOptions = accounts.filter((account) => String(account.id) !== fromAccountId);
+  const effectiveToId = toOptions.some((a) => String(a.id) === toAccountId)
+    ? toAccountId
+    : String(toOptions[0]?.id ?? "");
 
   if (accounts.length < 2) return null;
 
@@ -91,7 +99,7 @@ export function TransferForm({ accounts, defaultFromAccountId, onCreated }: Tran
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm">
           Para
           <select
-            value={toAccountId}
+            value={effectiveToId}
             onChange={(event) => setToAccountId(event.target.value)}
             className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
           >
@@ -156,7 +164,7 @@ export function TransferForm({ accounts, defaultFromAccountId, onCreated }: Tran
 
       <button
         type="submit"
-        disabled={status === "saving" || !toAccountId}
+        disabled={status === "saving" || !effectiveToId}
         className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
       >
         {status === "saving" ? "Transferindo..." : "Transferir"}

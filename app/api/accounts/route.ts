@@ -116,6 +116,7 @@ export async function POST(request: NextRequest) {
       description: "Saldo de Abertura",
       category_id: category.id,
       occurred_on: new Date().toISOString().slice(0, 10),
+      occurredTime: new Date().toTimeString().slice(0, 5),
     });
   }
   return NextResponse.json(account, { status: 201 });

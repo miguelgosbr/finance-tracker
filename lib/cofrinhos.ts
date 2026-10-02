@@ -13,6 +13,7 @@ export interface Cofrinho {
   goal_amount: number | null;
   cdi_percentage: number;
   balance: number;
+  opening_balance: number;
   last_accrued_on: string;
   created_at: string;
 }
@@ -82,14 +83,25 @@ export async function createCofrinho(
   accountId: number,
   name: string,
   cdiPercentage: number,
-  goalAmount: number | null
+  goalAmount: number | null,
+  initialBalance = 0,
+  initialYield = 0
 ): Promise<Cofrinho> {
   const db = await getDb();
   const result = await db.query<Cofrinho>(
-    "INSERT INTO cofrinhos (account_id, name, cdi_percentage, goal_amount) VALUES ($1, $2, $3, $4) RETURNING *",
-    [accountId, name.trim(), cdiPercentage, goalAmount]
+    `INSERT INTO cofrinhos (account_id, name, cdi_percentage, goal_amount, balance, opening_balance)
+     VALUES ($1, $2, $3, $4, $5, $5) RETURNING *`,
+    [accountId, name.trim(), cdiPercentage, goalAmount, initialBalance]
   );
-  return result.rows[0];
+  const cofrinho = result.rows[0];
+  // ponytail: "already earned" is recorded as this month's yield (it is part of initialBalance)
+  if (initialYield > 0) {
+    await db.query(
+      "INSERT INTO cofrinho_movements (cofrinho_id, type, amount) VALUES ($1, 'yield', $2)",
+      [cofrinho.id, initialYield]
+    );
+  }
+  return cofrinho;
 }
 
 export async function getCofrinho(cofrinhoId: number): Promise<Cofrinho | null> {

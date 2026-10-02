@@ -223,6 +223,14 @@ async function runMigrations(db: Queryable) {
     );
   `);
 
+  // opening_balance: money already in the cofrinho when it was registered,
+  // it never came out of the account's cash, so it is excluded from the
+  // account balance deduction.
+  await db.query(
+    `ALTER TABLE cofrinhos ADD COLUMN IF NOT EXISTS opening_balance DOUBLE PRECISION NOT NULL DEFAULT 0;`
+  );
+  await db.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS occurred_time TEXT;`);
+
   await db.query(
     `CREATE INDEX IF NOT EXISTS idx_cofrinhos_account_id ON cofrinhos(account_id);`
   );

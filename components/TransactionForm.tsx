@@ -6,6 +6,10 @@ import type { TransactionStatus, TransactionType } from "@/lib/transactions";
 
 const NEW_CATEGORY_VALUE = "__new__";
 
+function nowTime(): string {
+  return new Date().toTimeString().slice(0, 5);
+}
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -70,6 +74,7 @@ export function TransactionForm({
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [occurredOn, setOccurredOn] = useState(today());
+  const [occurredTime, setOccurredTime] = useState(nowTime());
   const [categoryId, setCategoryId] = useState<string>(
     categories[0] ? String(categories[0].id) : NEW_CATEGORY_VALUE
   );
@@ -118,6 +123,7 @@ export function TransactionForm({
           description,
           category_id: Number(resolvedCategoryId),
           occurred_on: occurredOn,
+          occurred_time: occurredTime,
           payment_method: type === "expense" ? paymentMethod : "account",
           status: txStatus,
         }),
@@ -132,6 +138,7 @@ export function TransactionForm({
       setDescription("");
       setNewCategoryName("");
       setOccurredOn(today());
+      setOccurredTime(nowTime());
       setPaymentMethod("account");
       setTxStatus(defaultStatusFor(today()));
       setFormStatus("success");
@@ -173,6 +180,17 @@ export function TransactionForm({
               setTxStatus(defaultStatusFor(event.target.value));
             }}
             className="w-full min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          Hora
+          <input
+            type="time"
+            required
+            value={occurredTime}
+            onChange={(event) => setOccurredTime(event.target.value)}
+            className="rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
           />
         </label>
       </div>

@@ -59,13 +59,14 @@ export async function parseTransactionInput(
   userId: number,
   account: Account | null
 ) {
-  const { type, amount, description, category_id, occurred_on, payment_method, status } =
+  const { type, amount, description, category_id, occurred_on, payment_method, status, occurred_time } =
     body as {
       type?: unknown;
       amount?: unknown;
       description?: unknown;
       category_id?: unknown;
       occurred_on?: unknown;
+      occurred_time?: unknown;
       payment_method?: unknown;
       status?: unknown;
     };
@@ -92,6 +93,14 @@ export async function parseTransactionInput(
 
   if (typeof occurred_on !== "string" || !DATE_PATTERN.test(occurred_on)) {
     return { error: "A data deve estar no formato AAAA-MM-DD." } as const;
+  }
+
+  if (
+    occurred_time !== undefined &&
+    occurred_time !== null &&
+    (typeof occurred_time !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(occurred_time))
+  ) {
+    return { error: "A hora deve estar no formato HH:MM." } as const;
   }
 
   const paymentMethod: PaymentMethod =
@@ -121,6 +130,7 @@ export async function parseTransactionInput(
       description: description.trim(),
       category_id,
       occurred_on,
+      occurredTime: (occurred_time as string | null | undefined) ?? null,
       paymentMethod,
       status: resolvedStatus,
     },
