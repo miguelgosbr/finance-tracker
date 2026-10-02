@@ -159,6 +159,26 @@ function CofrinhoCard({
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
+  const [editingYield, setEditingYield] = useState(false);
+  const [yieldValue, setYieldValue] = useState("");
+
+  async function saveYield(event: React.FormEvent) {
+    event.preventDefault();
+    const response = await fetch(`/api/cofrinhos/${cofrinho.id}/yield`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: Number(yieldValue) }),
+    });
+    if (!response.ok) {
+      const data = await response.json();
+      setErrorMessage(data.error ?? "Não foi possível salvar o rendimento.");
+      setStatus("error");
+      return;
+    }
+    setEditingYield(false);
+    onChanged();
+  }
+
   const progress =
     cofrinho.goal_amount && cofrinho.goal_amount > 0
       ? Math.min((cofrinho.balance / cofrinho.goal_amount) * 100, 100)
@@ -209,9 +229,48 @@ function CofrinhoCard({
         {currencyFormatter.format(cofrinho.balance)}
       </p>
 
-      <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-        Rendeu {currencyFormatter.format(cofrinho.monthlyYield)} este mês
-      </p>
+      {editingYield ? (
+        <form onSubmit={saveYield} className="mt-1 flex items-center gap-2 text-xs">
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            required
+            autoFocus
+            value={yieldValue}
+            onChange={(event) => setYieldValue(event.target.value)}
+            aria-label="Rendimento do mês"
+            className="w-28 rounded-md border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-800"
+          />
+          <button type="submit" className="font-medium text-blue-600 hover:underline">
+            Salvar
+          </button>
+          <button type="button" onClick={() => setEditingYield(false)} className="text-zinc-500 hover:underline">
+            Cancelar
+          </button>
+        </form>
+      ) : (
+        <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+          Rendeu {currencyFormatter.format(cofrinho.monthlyYield)} este mês
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => {
+                setYieldValue(String(cofrinho.monthlyYield));
+                setEditingYield(true);
+              }}
+              aria-label="Editar rendimento do mês"
+              title="Editar rendimento do mês"
+              className="ml-1.5 align-middle text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            >
+              <svg viewBox="0 0 24 24" className="inline h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
+          )}
+        </p>
+      )}
 
       {progress !== null && (
         <div className="mt-2">

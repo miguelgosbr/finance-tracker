@@ -5,6 +5,7 @@ import {
   getCofrinho,
   getMonthlyYield,
   recordMovement,
+  setMonthlyYield,
 } from "@/lib/cofrinhos";
 import { getDb } from "@/lib/db";
 import { setSetting } from "@/lib/settings";
@@ -83,5 +84,20 @@ describe("cofrinho CDI yield", () => {
     await accrueCofrinhoYield(cofrinho.id, AT_ACCRUAL);
 
     expect((await getCofrinho(cofrinho.id))!.balance).toBe(0);
+  });
+});
+
+describe("setMonthlyYield", () => {
+  it("overrides the month's yield and adjusts the balance", async () => {
+    const id = await setupCofrinho(1000, 100);
+    await accrueCofrinhoYield(id, AT_ACCRUAL); // ≈ 1.89
+
+    await setMonthlyYield(id, 5, AT_ACCRUAL);
+    expect(await getMonthlyYield(id, AT_ACCRUAL)).toBe(5);
+    expect((await getCofrinho(id))?.balance).toBeCloseTo(1005, 5);
+
+    await setMonthlyYield(id, 0, AT_ACCRUAL);
+    expect(await getMonthlyYield(id, AT_ACCRUAL)).toBe(0);
+    expect((await getCofrinho(id))?.balance).toBeCloseTo(1000, 5);
   });
 });

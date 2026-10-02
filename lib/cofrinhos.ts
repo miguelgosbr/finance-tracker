@@ -294,3 +294,39 @@ export async function getMonthlyYield(
 
   return Number(result.rows[0].total);
 }
+
+/**
+ * Overrides this month's yield with the real figure from the bank: replaces
+ * the month's accrued 'yield' movements with a single one for `target` and
+ * moves the balance by the difference.
+ */
+export async function setMonthlyYield(
+  cofrinhoId: number,
+  target: number,
+  referenceDate: Date = new Date()
+): Promise<Cofrinho> {
+  await accrueCofrinhoYield(cofrinhoId, referenceDate);
+
+  const current = await getMonthlyYield(cofrinhoId, referenceDate);
+  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)
+    .toISOString()
+    .slice(0, 10);
+  const today = toIsoDate(referenceDate);
+
+  const db = await getDb();
+  await db.query(
+    "DELETE FROM cofrinho_movements WHERE cofrinho_id = $1 AND type = 'yield' AND occurred_on BETWEEN $2 AND $3",
+    [cofrinhoId, monthStart, today]
+  );
+  if (target > 0) {
+    await db.query(
+      "INSERT INTO cofrinho_movements (cofrinho_id, type, amount, occurred_on) VALUES ($1, 'yield', $2, $3)",
+      [cofrinhoId, target, today]
+    );
+  }
+  const result = await db.query<Cofrinho>(
+    "UPDATE cofrinhos SET balance = balance + $2 WHERE id = $1 RETURNING *",
+    [cofrinhoId, target - current]
+  );
+  return result.rows[0];
+}
