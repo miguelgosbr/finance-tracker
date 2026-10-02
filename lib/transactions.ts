@@ -199,7 +199,10 @@ export async function getBalanceForAccounts(accountIds: number[]): Promise<numbe
   );
 
   const cofrinhosResult = await db.query<{ total: number }>(
-    `SELECT COALESCE(SUM(balance - opening_balance), 0) AS total FROM cofrinhos WHERE account_id IN (${placeholders})`,
+    `SELECT COALESCE(SUM(
+         balance - opening_balance - COALESCE(
+           (SELECT SUM(amount) FROM cofrinho_movements m WHERE m.cofrinho_id = cofrinhos.id AND m.type = 'yield'), 0)
+       ), 0) AS total FROM cofrinhos WHERE account_id IN (${placeholders})`,
     accountIds
   );
 

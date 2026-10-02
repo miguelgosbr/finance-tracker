@@ -83,6 +83,13 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (((initial_yield as number | undefined) ?? 0) > ((initial_balance as number | undefined) ?? 0)) {
+    return NextResponse.json(
+      { error: "O rendimento não pode ser maior que o saldo do cofrinho." },
+      { status: 400 }
+    );
+  }
+
   const cofrinho = await createCofrinho(
     account_id,
     name,

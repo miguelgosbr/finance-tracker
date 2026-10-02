@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createCofrinho, recordMovement } from "@/lib/cofrinhos";
+import { createCofrinho, recordMovement, setMonthlyYield } from "@/lib/cofrinhos";
 import { createTransaction, getCurrentBalance } from "@/lib/transactions";
 import { createTestUserAndAccount, type TestFixture } from "./helpers";
 
@@ -65,5 +65,19 @@ describe("getCurrentBalance", () => {
     await addIncome(100);
     await addExpense(250);
     expect(await getCurrentBalance(fixture.accountId)).toBe(-150);
+  });
+});
+
+describe("cofrinho yield and account balance", () => {
+  it("does not deduct yield or opening balance from account cash", async () => {
+    await addIncome(1000);
+    const cofrinho = await createCofrinho(fixture.accountId, "Reserva", 100, null, 500, 50);
+    expect(await getCurrentBalance(fixture.accountId)).toBe(1000);
+
+    await recordMovement(cofrinho.id, "deposit", 200);
+    expect(await getCurrentBalance(fixture.accountId)).toBe(800);
+
+    await setMonthlyYield(cofrinho.id, 80);
+    expect(await getCurrentBalance(fixture.accountId)).toBe(800);
   });
 });

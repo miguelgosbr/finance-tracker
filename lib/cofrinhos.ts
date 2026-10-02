@@ -90,10 +90,11 @@ export async function createCofrinho(
   const db = await getDb();
   const result = await db.query<Cofrinho>(
     `INSERT INTO cofrinhos (account_id, name, cdi_percentage, goal_amount, balance, opening_balance)
-     VALUES ($1, $2, $3, $4, $5, $5) RETURNING *`,
-    [accountId, name.trim(), cdiPercentage, goalAmount, initialBalance]
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [accountId, name.trim(), cdiPercentage, goalAmount, initialBalance, initialBalance - initialYield]
   );
   const cofrinho = result.rows[0];
+  // opening_balance is the principal only: the yield part is a yield movement, which the account balance never deducts
   // ponytail: "already earned" is recorded as this month's yield (it is part of initialBalance)
   if (initialYield > 0) {
     await db.query(
