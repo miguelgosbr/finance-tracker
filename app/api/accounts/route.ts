@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAccount, listAccounts, VALID_BANKS, type Bank } from "@/lib/accounts";
 import { getCurrentUser } from "@/lib/auth";
+import { listCategories } from "@/lib/categories";
+import { createTransaction } from "@/lib/transactions";
 
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 
@@ -90,11 +92,31 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  const parsed = parseAccountInput(await request.json());
+  const body = await request.json();
+  const parsed = parseAccountInput(body);
   if ("error" in parsed) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
 
+  const initialBalance = body.initial_balance ?? 0;
+  if (typeof initialBalance !== "number" || !Number.isFinite(initialBalance)) {
+    return NextResponse.json({ error: "Saldo inicial inválido." }, { status: 400 });
+  }
+
   const account = await createAccount(user.id, parsed.input);
+
+  if (initialBalance !== 0) {
+    // ponytail: a plain transaction in the "Outros" category, so it also shows in reports
+    const categories = await listCategories(user.id);
+    const category = categories.find((c) => c.name === "Outros") ?? categories[0];
+    await createTransaction({
+      account_id: account.id,
+      type: initialBalance > 0 ? "income" : "expense",
+      amount: Math.abs(initialBalance),
+      description: "Saldo de Abertura",
+      category_id: category.id,
+      occurred_on: new Date().toISOString().slice(0, 10),
+    });
+  }
   return NextResponse.json(account, { status: 201 });
 }

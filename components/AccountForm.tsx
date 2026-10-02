@@ -12,6 +12,7 @@ export interface AccountFormInput {
   creditLimit: number | null;
   creditLineDueDay: number | null;
   closingDay: number | null;
+  initialBalance?: number;
 }
 
 export function AccountForm({
@@ -40,6 +41,7 @@ export function AccountForm({
   const [closingDay, setClosingDay] = useState(
     initial?.closing_day ? String(initial.closing_day) : ""
   );
+  const [initialBalance, setInitialBalance] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -62,6 +64,7 @@ export function AccountForm({
         creditLimit: hasCreditLine ? Number(creditLimit) : null,
         creditLineDueDay: hasCreditLine && creditLineDueDay ? Number(creditLineDueDay) : null,
         closingDay: hasCreditLine && closingDay ? Number(closingDay) : null,
+        initialBalance: !initial && initialBalance ? Number(initialBalance) : undefined,
       });
     } catch (error) {
       setStatus("error");
@@ -113,6 +116,20 @@ export function AccountForm({
           className="h-10 w-14 cursor-pointer rounded-md border border-zinc-300 dark:border-zinc-700"
         />
       </label>
+
+      {!initial && (
+        <label className="flex flex-col gap-1 text-sm">
+          Saldo Inicial (R$)
+          <input
+            type="number"
+            step="0.01"
+            value={initialBalance}
+            onChange={(event) => setInitialBalance(event.target.value)}
+            placeholder="0,00 (opcional)"
+            className="w-36 min-w-0 rounded-md border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-800"
+          />
+        </label>
+      )}
 
       <label className="flex items-center gap-2 pb-2 text-sm">
         <input
