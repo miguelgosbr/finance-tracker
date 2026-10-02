@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AccountTabs, type AccountFormInput } from "@/components/AccountTabs";
@@ -23,6 +23,18 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
+
+const HIDDEN_KEY = "balanceHidden";
+
+function EyeIcon({ off }: { off: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+      {off && <path d="m3 3 18 18" />}
+    </svg>
+  );
+}
 
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" });
 
@@ -77,6 +89,23 @@ export function Dashboard({
   const [pendingExpense, setPendingExpense] = useState(initialPendingExpense);
   const [transfers, setTransfers] = useState(initialTransfers);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    // ponytail: read after mount to avoid SSR hydration mismatch
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setHidden(localStorage.getItem(HIDDEN_KEY) === "1");
+    } catch {}
+  }, []);
+  function toggleHidden() {
+    const next = !hidden;
+    setHidden(next);
+    try {
+      localStorage.setItem(HIDDEN_KEY, next ? "1" : "0");
+    } catch {}
+  }
+  const money = (value: number) => (hidden ? "R$ ***" : currencyFormatter.format(value));
 
   const isAll = scope === "all";
   const currentAccountId = isAll ? null : Number(scope);
@@ -243,11 +272,21 @@ export function Dashboard({
           className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
           style={theme ? { borderTopColor: theme.color, borderTopWidth: 4 } : undefined}
         >
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {isAll ? "Saldo Líquido" : "Saldo atual"}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              {isAll ? "Saldo Líquido" : "Saldo atual"}
+            </p>
+            <button
+              type="button"
+              onClick={toggleHidden}
+              aria-label={hidden ? "Mostrar valores" : "Ocultar valores"}
+              className="text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-200"
+            >
+              <EyeIcon off={hidden} />
+            </button>
+          </div>
           <p className="text-3xl font-semibold text-zinc-900 dark:text-zinc-50">
-            {currencyFormatter.format(balance)}
+            {money(balance)}
           </p>
           {isAll && (
             <p className="mt-1 text-xs text-zinc-400">
@@ -258,21 +297,21 @@ export function Dashboard({
           {(pendingIncome > 0 || pendingExpense > 0) && (
             <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
               {pendingExpense > 0 &&
-                `${currencyFormatter.format(pendingExpense)} em contas pendentes este mês`}
+                `${money(pendingExpense)} em contas pendentes este mês`}
               {pendingExpense > 0 && pendingIncome > 0 && " · "}
               {pendingIncome > 0 &&
-                `${currencyFormatter.format(pendingIncome)} a receber este mês`}
+                `${money(pendingIncome)} a receber este mês`}
             </p>
           )}
 
           {creditLine && (
             <div className="mt-3 border-t border-zinc-100 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
               <p className="mb-1 font-medium text-zinc-600 dark:text-zinc-300">Linha de crédito</p>
-              <p>Fatura fechada: {currencyFormatter.format(creditLine.closedInvoice)}</p>
-              <p>Fatura aberta: {currencyFormatter.format(creditLine.openInvoice)}</p>
+              <p>Fatura fechada: {money(creditLine.closedInvoice)}</p>
+              <p>Fatura aberta: {money(creditLine.openInvoice)}</p>
               <p>
-                Limite disponível: {currencyFormatter.format(creditLine.availableLimit)} de{" "}
-                {currencyFormatter.format(creditLine.limit)}
+                Limite disponível: {money(creditLine.availableLimit)} de{" "}
+                {money(creditLine.limit)}
               </p>
               {creditLine.dueDate && (
                 <p>Vencimento da fatura fechada: {dateFormatter.format(new Date(`${creditLine.dueDate}T12:00:00`))}</p>
@@ -286,7 +325,7 @@ export function Dashboard({
           <div className="rounded-xl border border-amber-300 bg-white p-4 dark:border-amber-700 dark:bg-zinc-900">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">Total de Faturas a Pagar</p>
             <p className="text-2xl font-semibold text-amber-600 dark:text-amber-400">
-              {currencyFormatter.format(totalInvoices)}
+              {money(totalInvoices)}
             </p>
             <p className="mt-1 text-xs text-zinc-400">
               Soma das faturas aberta e fechada de todas as contas com cartão — é dívida, não
