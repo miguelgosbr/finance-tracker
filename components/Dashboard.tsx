@@ -36,6 +36,18 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
+const PAGE_SIZE = 10;
+
+const SORTS = {
+  date_desc: { label: "Data (mais recentes)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => b.occurred_on.localeCompare(a.occurred_on) || b.id - a.id },
+  date_asc: { label: "Data (mais antigos)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => a.occurred_on.localeCompare(b.occurred_on) || a.id - b.id },
+  name_asc: { label: "Nome (A-Z)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => a.description.localeCompare(b.description, "pt-BR") },
+  name_desc: { label: "Nome (Z-A)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => b.description.localeCompare(a.description, "pt-BR") },
+  amount_desc: { label: "Valor (maior)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => b.amount - a.amount },
+  amount_asc: { label: "Valor (menor)", cmp: (a: TransactionWithAccount, b: TransactionWithAccount) => a.amount - b.amount },
+};
+type SortKey = keyof typeof SORTS;
+
 const dateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" });
 
 interface DashboardProps {
@@ -90,6 +102,8 @@ export function Dashboard({
   const [transfers, setTransfers] = useState(initialTransfers);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const [sortKey, setSortKey] = useState<SortKey>("date_desc");
+  const [page, setPage] = useState(1);
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
     // ponytail: read after mount to avoid SSR hydration mismatch
@@ -106,6 +120,14 @@ export function Dashboard({
     } catch {}
   }
   const money = (value: number) => (hidden ? "R$ ***" : currencyFormatter.format(value));
+
+  const sortedTransactions = [...transactions].sort(SORTS[sortKey].cmp);
+  const pageCount = Math.max(1, Math.ceil(sortedTransactions.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageTransactions = sortedTransactions.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
 
   const isAll = scope === "all";
   const currentAccountId = isAll ? null : Number(scope);
@@ -384,11 +406,28 @@ export function Dashboard({
         )}
 
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 className="mb-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            Últimos lançamentos
-          </h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              Últimos lançamentos
+            </h2>
+            <select
+              value={sortKey}
+              onChange={(event) => {
+                setSortKey(event.target.value as SortKey);
+                setPage(1);
+              }}
+              aria-label="Ordenar lançamentos"
+              className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800"
+            >
+              {(Object.keys(SORTS) as SortKey[]).map((key) => (
+                <option key={key} value={key}>
+                  {SORTS[key].label}
+                </option>
+              ))}
+            </select>
+          </div>
           <ul className="flex flex-col gap-2">
-            {transactions.slice(0, 10).map((transaction) => (
+            {pageTransactions.map((transaction) => (
               <li key={transaction.id} className="flex items-center justify-between text-sm">
                 <span className="text-zinc-600 dark:text-zinc-400">
                   {transaction.description}
@@ -419,6 +458,41 @@ export function Dashboard({
               <li className="text-sm text-zinc-400">Nenhum lançamento ainda.</li>
             )}
           </ul>
+          {pageCount > 1 && (
+            <nav className="mt-3 flex flex-wrap items-center justify-center gap-1 text-xs">
+              <button
+                type="button"
+                disabled={currentPage === 1}
+                onClick={() => setPage(currentPage - 1)}
+                className="rounded px-2 py-1 text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Anterior
+              </button>
+              {Array.from({ length: pageCount }, (_, index) => index + 1).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setPage(n)}
+                  aria-current={n === currentPage ? "page" : undefined}
+                  className={`rounded px-2 py-1 ${
+                    n === currentPage
+                      ? "bg-blue-600 text-white"
+                      : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={currentPage === pageCount}
+                onClick={() => setPage(currentPage + 1)}
+                className="rounded px-2 py-1 text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Próximo
+              </button>
+            </nav>
+          )}
         </div>
 
         {transfers.length > 0 && (
